@@ -1,0 +1,969 @@
+</script>
+
+<script>
+(function(){
+"use strict";
+/* ============================================================
+   Code for Public Health UK — app engine
+   Parses the lesson markup in the course data block, renders the
+   course, tracks progress in memory, and runs a live SQLite
+   playground (sql.js, loaded lazily from cdnjs).
+   ============================================================ */
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function inline(s){
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g, function(m,c){ return "<code>"+c+"</code>"; });
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return s;
+}
+
+/* ---------------- 1. Parse course text ---------------- */
+var raw = $("course").textContent;
+raw = raw.replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&"); // amp LAST
+
+var MODULES = [];              // {n, title, lessons:[]}
+var LESSONS = [];              // {n, mod, title, blocks:[]}
+(function parse(){
+  var lines = raw.split(/\r?\n/);
+  var i = 0, cur = null, block = null;
+  function endBlock(){ if(block && cur){ cur.blocks.push(block); } block = null; }
+  // header
+  while(i < lines.length && lines[i].trim() !== "#MODULES") i++;
+  i++;
+  while(i < lines.length && !/^#LESSON /.test(lines[i])){
+    var mm = lines[i].match(/^(\d+)\|(.+)$/);
+    if(mm) MODULES.push({ n:+mm[1], title:mm[2].trim(), lessons:[] });
+    i++;
+  }
+  for(; i < lines.length; i++){
+    var L = lines[i];
+    var lm = L.match(/^#LESSON (\d+)\|(.+)$/);
+    if(lm){
+      endBlock();
+      cur = { n: LESSONS.length+1, mod:+lm[1], title:lm[2].trim(), blocks:[] };
+      LESSONS.push(cur);
+      var M = MODULES.filter(function(m){return m.n===cur.mod;})[0];
+      if(M) M.lessons.push(cur);
+      continue;
+    }
+    if(/^::/.test(L)){
+      endBlock();
+      var parts = L.slice(2).split("|");
+      block = { type: parts[0].trim(), args: parts.slice(1), lines: [] };
+      continue;
+    }
+    if(block) block.lines.push(L);
+  }
+  endBlock();
+})();
+var TOTAL = LESSONS.length;
+
+/* ---------------- 2. Block renderers ---------------- */
+var codeStore = [];   // raw code for copy / run buttons
+var quizStore = [];   // {ok, why}
+
+function paraHTML(lines){
+  var out = "", para = [], ul = [];
+  function flushP(){ if(para.length){ para.forEach(function(t){ out += "<p>"+inline(t)+"</p>"; }); para = []; } }
+  function flushU(){ if(ul.length){ out += "<ul>"+ul.map(function(t){return "<li>"+inline(t)+"</li>";}).join("")+"</ul>"; ul = []; } }
+  lines.forEach(function(l){
+    if(!l.trim()){ flushP(); flushU(); return; }
+    if(/^- /.test(l)){ flushP(); ul.push(l.slice(2)); }
+    else { flushU(); para.push(l); }
+  });
+  flushP(); flushU();
+  return out;
+}
+
+var LANGNAME = { sql:"SQL", sqltry:"SQL \u00b7 try it", r:"R", text:"Text", bash:"Shell", powershell:"PowerShell", python:"Python", yaml:"YAML" };
+function highlight(code, lang){
+  return code.split("\n").map(function(l){
+    var t = esc(l);
+    if((lang==="sql"||lang==="sqltry") && /^\s*--/.test(l)) return '<span class="cm">'+t+"</span>";
+    if((lang==="r"||lang==="bash"||lang==="text"||lang==="python") && /^\s*#/.test(l)) return '<span class="cm">'+t+"</span>";
+    return t;
+  }).join("\n");
+}
+function codeHTML(lang, label, code, runnable){
+  var id = codeStore.length; codeStore.push(code);
+  var name = label || LANGNAME[lang] || (lang||"code").toUpperCase();
+  return '<div class="codewrap"><div class="chead"><span>'+esc(name)+'</span><span class="sp"></span>'
+    + (runnable ? '<button class="cbtn" data-run="'+id+'">Run \u25b6</button>' : "")
+    + '<button class="cbtn" data-copy="'+id+'">Copy</button></div>'
+    + "<pre>"+highlight(code, lang)+"</pre></div>";
+}
+
+var NOTELAB = { info:"Note", warn:"Take care", ai:"AI corner", study:"Study tip" };
+
+var RENDER = {
+  p: function(b){ return paraHTML(b.lines); },
+  h: function(b){ return "<h3>"+inline(b.args[0]||"")+"</h3>"; },
+  code: function(b){
+    var lang = (b.args[0]||"text").trim();
+    var code = b.lines.join("\n").replace(/^\n+|\n+$/g,"");
+    return codeHTML(lang, b.args[1], code, lang==="sqltry");
+  },
+  oscode: function(b){
+    var lang = (b.args[0]||"text").trim();
+    var sec = { win:[], mac:[], linux:[] }, curKey = null;
+    b.lines.forEach(function(l){
+      var m = l.match(/^@(win|mac|linux)\s*$/);
+      if(m){ curKey = m[1]; return; }
+      if(curKey) sec[curKey].push(l);
+    });
+    var plat = "win", p = (navigator.platform||"") + " " + (navigator.userAgent||"");
+    if(/Mac|iPhone|iPad|iPod/i.test(p)) plat = "mac";
+    else if(/Linux|X11|CrOS/i.test(p) && !/Android/i.test(p)) plat = "linux";
+    var labels = { win:"Windows", mac:"macOS", linux:"Linux" };
+    var bar = "", panes = "";
+    ["win","mac","linux"].forEach(function(k){
+      var on = (k===plat);
+      bar += '<button data-os="'+k+'" class="'+(on?"on":"")+'" type="button">'+labels[k]+"</button>";
+      panes += '<div data-ospane="'+k+'" style="'+(on?"":"display:none")+'">'
+        + codeHTML(lang, labels[k], sec[k].join("\n").replace(/^\n+|\n+$/g,""), false) + "</div>";
+    });
+    return '<div class="ostabs"><div class="osbar">'+bar+"</div>"+panes+"</div>";
+  },
+  quiz: function(b){
+    var q = "", opts = [], ok = -1, why = "";
+    b.lines.forEach(function(l){
+      if(/^Q /.test(l)) q = l.slice(2);
+      else if(/^\* /.test(l)){ ok = opts.length; opts.push(l.slice(2)); }
+      else if(/^- /.test(l)) opts.push(l.slice(2));
+      else if(/^! /.test(l)) why = l.slice(2);
+      else if(l.trim()) why += (why?" ":"") + l.trim();
+    });
+    var qid = quizStore.length; quizStore.push({ ok: ok, why: why });
+    var h = '<div class="quiz" data-qid="'+qid+'"><div class="qlab">Quick check</div><div class="qtext">'+inline(q)+"</div>";
+    opts.forEach(function(o, ix){ h += '<button class="opt" data-ix="'+ix+'" type="button">'+inline(o)+"</button>"; });
+    h += '<button class="reveal-btn" type="button">Show answer →</button>';
+    h += '<div class="why"><b>Why:</b> '+inline(why)+"</div></div>";
+    return h;
+  },
+  ex: function(b){
+    var task = [], parts = [], cp = null;
+    b.lines.forEach(function(l){
+      var f = l.match(/^~~~(\w*)\s*$/);
+      if(f){ cp = { lang: f[1]||"text", lines: [] }; parts.push(cp); return; }
+      if(cp) cp.lines.push(l); else task.push(l);
+    });
+    var h = '<div class="ex"><div class="xlab">Exercise</div>' + paraHTML(task)
+      + '<button class="btn ghost solbtn" type="button">Show solution</button><div class="sol">';
+    parts.forEach(function(pt){ h += codeHTML(pt.lang, "Solution \u00b7 "+(LANGNAME[pt.lang]||pt.lang), pt.lines.join("\n").replace(/^\n+|\n+$/g,""), pt.lang==="sqltry"); });
+    h += "</div></div>";
+    return h;
+  },
+  key: function(b){
+    var items = b.lines.filter(function(l){return /^- /.test(l);}).map(function(l){return l.slice(2);});
+    return '<div class="key"><div class="klab">Key points</div><ul>'
+      + items.map(function(t){return "<li>"+inline(t)+"</li>";}).join("") + "</ul></div>";
+  },
+  note: function(b){
+    var type = (b.args[0]||"info").trim();
+    var lab = b.args[1] || NOTELAB[type] || "Note";
+    return '<div class="note '+esc(type)+'"><b class="lab">'+esc(lab)+"</b>"+paraHTML(b.lines)+"</div>";
+  },
+  table: function(b){
+    var rows = b.lines.filter(function(l){return l.trim();}).map(function(l){
+      return l.split("|").map(function(c){ return c.replace(/\u00a6/g,"|"); });
+    });
+    if(!rows.length) return "";
+    var h = '<div class="tblwrap"><table class="tbl"><thead><tr>';
+    rows[0].forEach(function(c){ h += "<th>"+inline(c)+"</th>"; });
+    h += "</tr></thead><tbody>";
+    rows.slice(1).forEach(function(r){
+      h += "<tr>";
+      r.forEach(function(c){ h += "<td>"+inline(c)+"</td>"; });
+      h += "</tr>";
+    });
+    return h + "</tbody></table></div>";
+  }
+};
+
+function blocksHTML(blocks){
+  return blocks.map(function(b){
+    var f = RENDER[b.type];
+    return f ? f(b) : "";
+  }).join("");
+}
+
+/* ---------------- 3. Progress state (in-memory) ---------------- */
+var done = new Set();
+function pct(){ return TOTAL ? Math.round(100*done.size/TOTAL) : 0; }
+function refreshTop(){
+  $("topPct").textContent = pct()+"%";
+  $("railFill").style.width = pct()+"%";
+}
+function refreshDrawerStates(){
+  MODULES.forEach(function(M){
+    var dn = M.lessons.filter(function(l){return done.has(l.n);}).length;
+    var el = document.querySelector('[data-mcount="'+M.n+'"]');
+    if(el) el.textContent = dn+" / "+M.lessons.length;
+  });
+  var curN = routeLesson();
+  document.querySelectorAll("a.stop").forEach(function(a){
+    var n = +a.getAttribute("data-n");
+    a.classList.toggle("done", done.has(n));
+    a.classList.toggle("now", n===curN);
+    var t = a.querySelector(".tick");
+    if(t) t.textContent = done.has(n) ? "\u2713" : "";
+  });
+}
+function refreshAll(){ refreshTop(); refreshDrawerStates(); }
+
+/* ---------------- 4. Drawer ---------------- */
+function buildDrawer(){
+  var h = "";
+  MODULES.forEach(function(M){
+    h += '<details class="mod" data-mod="'+M.n+'"><summary><span class="mnum">'+M.n+'</span>'
+      + '<span class="mtitle">'+esc(M.title)+'<div class="mcount" data-mcount="'+M.n+'">0 / '+M.lessons.length+"</div></span>"
+      + '<span class="chev">\u25b8</span></summary><div class="stops">';
+    M.lessons.forEach(function(l){
+      h += '<a class="stop" data-n="'+l.n+'" href="#l/'+l.n+'"><span class="ln">'+l.n+'</span><span class="lt">'
+        + esc(l.title) + '</span><span class="tick"></span></a>';
+    });
+    h += "</div></details>";
+  });
+  $("drawerScroll").innerHTML = h;
+}
+function openDrawer(){ $("drawer").classList.add("show"); $("overlay").classList.add("show"); }
+function closeDrawer(){ $("drawer").classList.remove("show"); $("overlay").classList.remove("show"); }
+$("burger").addEventListener("click", openDrawer);
+$("drawerClose").addEventListener("click", closeDrawer);
+$("overlay").addEventListener("click", closeDrawer);
+$("drawerScroll").addEventListener("click", function(e){
+  var a = e.target.closest("a.stop");
+  if(a && window.innerWidth < 1024) closeDrawer();
+});
+$("searchIn").addEventListener("input", function(){
+  var term = this.value.trim().toLowerCase();
+  document.querySelectorAll(".mod").forEach(function(mod){
+    var any = false;
+    mod.querySelectorAll("a.stop").forEach(function(a){
+      var hit = !term || a.textContent.toLowerCase().indexOf(term) !== -1;
+      a.style.display = hit ? "" : "none";
+      if(hit) any = true;
+    });
+    mod.style.display = any ? "" : "none";
+    if(term) mod.open = true;
+  });
+});
+document.querySelectorAll(".drawer-foot [data-go]").forEach(function(b){
+  b.addEventListener("click", function(){
+    location.hash = b.getAttribute("data-go")==="play" ? "#play" : "#home";
+    if(window.innerWidth < 1024) closeDrawer();
+  });
+});
+
+/* ---------------- 5. Toast + progress dialog ---------------- */
+var toastT = null;
+function toast(msg){
+  var t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT);
+  toastT = setTimeout(function(){ t.classList.remove("show"); }, 2400);
+}
+function b64e(s){ return btoa(unescape(encodeURIComponent(s))); }
+function b64d(s){ return decodeURIComponent(escape(atob(s))); }
+$("progBtn").addEventListener("click", function(){
+  $("progCode").value = "PHUK1." + b64e(JSON.stringify({ v:1, done: Array.from(done) }));
+  $("progDlg").showModal();
+});
+$("copyProg").addEventListener("click", function(){
+  var ta = $("progCode");
+  ta.select(); ta.setSelectionRange(0, 99999);
+  var okd = false;
+  try{ okd = document.execCommand("copy"); }catch(e){}
+  if(navigator.clipboard){ navigator.clipboard.writeText(ta.value).catch(function(){}); okd = true; }
+  toast(okd ? "Progress code copied" : "Select and copy the code manually");
+});
+$("loadProg").addEventListener("click", function(){
+  var v = $("progCode").value.trim();
+  try{
+    if(v.indexOf("PHUK1.")===0) v = v.slice(6);
+    var o = JSON.parse(b64d(v));
+    if(!o || !Array.isArray(o.done)) throw new Error("bad");
+    done = new Set(o.done.filter(function(n){ return n>=1 && n<=TOTAL; }));
+    refreshAll(); route();
+    $("progDlg").close();
+    toast("Progress restored \u2014 "+done.size+" lessons \u2713");
+  }catch(e){ toast("That code couldn't be read \u2014 check you pasted it whole"); }
+});
+$("closeProg").addEventListener("click", function(){ $("progDlg").close(); });
+window.addEventListener("beforeunload", function(e){
+  if(done.size > 0){ e.preventDefault(); e.returnValue = ""; }
+});
+
+/* ---------------- 6. Router + pages ---------------- */
+function routeLesson(){
+  var m = location.hash.match(/^#l\/(\d+)$/);
+  if(!m) return 0;
+  var n = +m[1];
+  return (n>=1 && n<=TOTAL) ? n : 0;
+}
+function firstNotDone(){
+  for(var i=0;i<LESSONS.length;i++) if(!done.has(LESSONS[i].n)) return LESSONS[i].n;
+  return 1;
+}
+function homeHTML(){
+  var h = '<div class="home-hero"><div class="eyebrow">Interactive course</div>'
+    + "<h1>SQL &amp; R for UK public health \u2014 from zero</h1>"
+    + '<p>'+TOTAL+' guided lessons taking you from your first ever query to reproducible, AI-literate analytical pipelines \u2014 built for NHS, UKHSA and local-authority work. No installation needed to start: a live SQL playground with a fictional health database runs right here.</p>'
+    + '<div class="statrow"><span class="stat">'+TOTAL+' lessons</span><span class="stat">'+MODULES.length+' modules</span>'
+    + '<span class="stat">Live SQL playground</span><span class="stat">'+pct()+'% complete</span></div>'
+    + '<div class="statrow" style="margin-top:16px"><button class="btn primary" id="startBtn">'
+    + (done.size ? "Continue \u2192 lesson "+firstNotDone() : "Start lesson 1 \u2192") + "</button>"
+    + '<button class="btn ghost" id="heroPlay" style="background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.4)">SQL playground \u25b6</button></div></div>';
+  h += '<div class="card"><b>How to use this course</b><p class="small" style="margin-top:6px">Work top to bottom \u2014 each lesson has a guide, worked examples, quick-check quizzes and an exercise with a hidden solution. Tap <b>Mark complete</b> as you finish lessons; your progress lives in this tab, so use <b>\ud83d\udcbe Save / load progress</b> (in the menu) to keep a copy. SQL lessons include <b>Run \u25b6</b> buttons that open queries in the live playground.</p></div>';
+  MODULES.forEach(function(M){
+    var dn = M.lessons.filter(function(l){return done.has(l.n);}).length;
+    var p = M.lessons.length ? Math.round(100*dn/M.lessons.length) : 0;
+    var first = M.lessons.length ? M.lessons[0].n : 1;
+    h += '<div class="card"><a class="modcard" href="#l/'+first+'"><span class="mnum">'+M.n+"</span>"
+      + '<span style="flex:1"><b>'+esc(M.title)+"</b>"
+      + '<div class="small">'+M.lessons.length+" lessons \u00b7 "+dn+" done</div>"
+      + '<div class="mbar"><i style="width:'+p+'%"></i></div></span></a></div>';
+  });
+  h += '<p class="small" style="text-align:center;margin:26px 0 8px">All data in this course is fictional and computer-generated. Built as a self-contained page \u2014 lessons work offline; the playground fetches its SQL engine once from a CDN.</p>';
+  return h;
+}
+function lessonHTML(n){
+  var L = LESSONS[n-1];
+  var M = MODULES.filter(function(m){return m.n===L.mod;})[0];
+  var h = '<div class="eyebrow">Module '+L.mod+" \u00b7 "+esc(M ? M.title : "")+"</div>"
+    + "<h1>"+esc(L.title)+"</h1>"
+    + '<div class="meta-row"><span class="tag">Lesson '+n+" of "+TOTAL+"</span>"
+    + '<span class="tag teal" id="doneTag">'+(done.has(n) ? "Completed \u2713" : "In progress")+"</span></div>";
+  h += blocksHTML(L.blocks);
+  h += '<div class="card small" style="text-align:center">Lesson '+n+" of "+TOTAL
+    + (n<TOTAL ? ' \u00b7 next: \u201c'+esc(LESSONS[n].title)+'\u201d' : " \u00b7 that's the whole course \ud83c\udf89")+"</div>";
+  return h;
+}
+
+/* ---------------- 7. Playground ---------------- */
+var CDN = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/";
+var db = null, engineLoading = null, pendingSQL = null;
+
+var SCHEMA_COLS = {
+  patients: "patient_id, sex, birth_date, ethnicity, lsoa_code, practice_code, risk_score, registration_date, practice_type",
+  gp_practices: "practice_code, practice_name, icb_name, la_name, list_size, practice_type, established_date",
+  lsoa_imd: "lsoa_code, imd_decile, la_name, population_estimate, urban_rural",
+  admissions: "admission_id, patient_id, admission_date, discharge_date, admission_method, specialty, primary_diagnosis, outcome, severity_score, los_days",
+  icd10_lookup: "icd10_code, description, category, seriousness, is_chronic",
+  vaccinations: "vaccination_id, patient_id, vaccine, dose_number, date_given, lot_number, administered_by",
+  lab_results: "result_id, patient_id, test, value, units, date_taken, reference_range, flagged",
+  deaths: "patient_id, date_of_death, underlying_cause, death_certs_path",
+  la_population: "la_name, sex, age_band, population, deprivation_quintile"
+};
+var SAMPLES = [
+  ["Ten patients", "SELECT * FROM patients LIMIT 10;"],
+  ["Admissions by specialty", "SELECT specialty, COUNT(*) AS n FROM admissions GROUP BY specialty ORDER BY n DESC;"],
+  ["Emergency share by month (FY 2025/26)", "SELECT strftime('%Y-%m', admission_date) AS month,\n       COUNT(*) AS total,\n       SUM(CASE WHEN admission_method = 'Emergency' THEN 1 ELSE 0 END) AS emergency\nFROM admissions\nWHERE admission_date >= '2025-04-01' AND admission_date < '2026-04-01'\nGROUP BY month\nORDER BY month;"],
+  ["Join: admissions with practice & LA", "SELECT g.la_name, COUNT(*) AS admissions\nFROM admissions a\nJOIN patients p ON p.patient_id = a.patient_id\nJOIN gp_practices g ON g.practice_code = p.practice_code\nGROUP BY g.la_name\nORDER BY admissions DESC;"],
+  ["Deprivation gradient (emergency admissions)", "SELECT li.imd_decile, COUNT(*) AS emergency_admissions\nFROM admissions a\nJOIN patients p  ON p.patient_id = a.patient_id\nJOIN lsoa_imd li ON li.lsoa_code = p.lsoa_code\nWHERE a.admission_method = 'Emergency'\nGROUP BY li.imd_decile\nORDER BY li.imd_decile;"],
+  ["Patient demographics by deprivation", "SELECT l.imd_decile, p.sex, COUNT(*) as n\nFROM patients p\nJOIN lsoa_imd l ON l.lsoa_code = p.lsoa_code\nGROUP BY l.imd_decile, p.sex\nORDER BY l.imd_decile, p.sex;"],
+  ["Vaccination coverage gradient", "SELECT l.imd_decile, v.vaccine, COUNT(DISTINCT v.patient_id) as vaccinated, \n       COUNT(DISTINCT p.patient_id) as eligible\nFROM vaccinations v\nJOIN patients p ON p.patient_id = v.patient_id\nJOIN lsoa_imd l ON l.lsoa_code = p.lsoa_code\nWHERE v.dose_number = 1\nGROUP BY l.imd_decile, v.vaccine\nORDER BY l.imd_decile, v.vaccine;"],
+  ["Lab results with flags", "SELECT lr.test, lr.flagged, COUNT(*) as count, AVG(lr.value) as avg_value\nFROM lab_results lr\nWHERE lr.flagged IS NOT NULL\nGROUP BY lr.test, lr.flagged\nORDER BY lr.test;"],
+  ["Risk score distribution", "SELECT FLOOR(risk_score/10)*10 as risk_bucket, COUNT(*) as n\nFROM patients\nGROUP BY risk_bucket\nORDER BY risk_bucket;"],
+  ["Outcome by specialty", "SELECT a.specialty, a.outcome, COUNT(*) as n\nFROM admissions a\nGROUP BY a.specialty, a.outcome\nORDER BY n DESC;"]
+];
+
+function playHTML(){
+  var h = '<div class="eyebrow">Interactive</div><h1>SQL playground</h1>'
+    + '<p class="lede">A real SQLite database of <b>fictional</b> Barsetshire health data, running entirely in your browser. Nothing you do here can break anything \u2014 <b>Reset database</b> restores it all.</p>'
+    + '<div class="card pg"><div class="status" id="pgStatus">Engine loads on first run (needs internet once, ~1&nbsp;MB).</div>'
+    + '<textarea id="pgSql" spellcheck="false" aria-label="SQL query">SELECT * FROM patients LIMIT 10;</textarea>'
+    + '<div class="pgbar"><button class="btn primary" id="pgRun">Run \u25b6</button>'
+    + '<button class="btn ghost" id="pgReset">Reset database</button></div>'
+    + '<div id="pgOut"></div></div>';
+  h += '<div class="card"><b>Tables</b> <span class="small">\u2014 tap one for a starter query</span><div class="schema-chips" id="pgChips">';
+  Object.keys(SCHEMA_COLS).forEach(function(t){ h += '<button type="button" data-tbl="'+t+'">'+t+"</button>"; });
+  h += '</div><details><summary class="small" style="cursor:pointer">Show all columns</summary><div class="small" style="margin-top:8px">';
+  Object.keys(SCHEMA_COLS).forEach(function(t){ h += "<p style=\"margin:.35em 0\"><b>"+t+"</b> \u2014 "+SCHEMA_COLS[t]+"</p>"; });
+  h += "</div></details></div>";
+  h += '<div class="card"><b>Sample queries</b><div class="pgbar" style="margin-top:10px">';
+  SAMPLES.forEach(function(s, i){ h += '<button class="chipbtn" type="button" data-sample="'+i+'">'+esc(s[0])+"</button>"; });
+  h += "</div></div>";
+  h += '<div class="card small">Tip: lessons with <b>SQL \u00b7 try it</b> blocks have a <b>Run \u25b6</b> button that brings the query straight here. Multiple statements separated by semicolons run in order.</div>';
+  return h;
+}
+function setStatus(msg){ var el = $("pgStatus"); if(el) el.textContent = msg; }
+function ensureEngine(){
+  if(db) return Promise.resolve(true);
+  if(engineLoading) return engineLoading;
+  setStatus("Loading SQL engine \u2026 (first time only)");
+  engineLoading = new Promise(function(resolve){
+    var s = document.createElement("script");
+    s.src = CDN + "sql-wasm.js";
+    s.onload = function(){
+      initSqlJs({ locateFile: function(f){ return CDN + f; } }).then(function(SQL){
+        db = new SQL.Database();
+        db.run(genSeed());
+        var c = db.exec("SELECT (SELECT COUNT(*) FROM patients), (SELECT COUNT(*) FROM admissions)")[0].values[0];
+        setStatus("Ready — "+c[0]+" patients, "+c[1]+" admissions loaded. Fictional health data. ~2MB seed.");
+        resolve(true);
+      }).catch(function(e){
+        setStatus("The SQL engine couldn't start ("+e.message+"). Lessons still work fully.");
+        engineLoading = null; resolve(false);
+      });
+    };
+    s.onerror = function(){
+      setStatus("Couldn't fetch the SQL engine \u2014 the playground needs internet the first time. All lessons work offline.");
+      engineLoading = null; resolve(false);
+    };
+    document.head.appendChild(s);
+  });
+  return engineLoading;
+}
+function runSQL(){
+  var ta = $("pgSql"), out = $("pgOut");
+  if(!ta || !out) return;
+  var sql = ta.value;
+  ensureEngine().then(function(ok){
+    if(!ok || !db) return;
+    var t0 = performance.now();
+    try{
+      var res = db.exec(sql);
+      var ms = (performance.now()-t0).toFixed(0);
+      if(!res.length){
+        var ch = db.getRowsModified();
+        out.innerHTML = '<div class="status">Done'+(ch ? " \u2014 "+ch+" row(s) changed" : " \u2014 no rows returned")+" \u00b7 "+ms+"\u2009ms</div>";
+        return;
+      }
+      var h = "";
+      res.forEach(function(r){
+        var cap = 300, shown = Math.min(r.values.length, cap);
+        h += '<div class="tblwrap"><table class="tbl"><thead><tr>';
+        r.columns.forEach(function(c){ h += "<th>"+esc(c)+"</th>"; });
+        h += "</tr></thead><tbody>";
+        for(var i=0;i<shown;i++){
+          h += "<tr>";
+          r.values[i].forEach(function(v){
+            h += "<td>"+(v===null ? '<span class="small"><i>NULL</i></span>' : esc(v))+"</td>";
+          });
+          h += "</tr>";
+        }
+        h += "</tbody></table></div>";
+        h += '<div class="status">'+r.values.length+" row(s)"+(r.values.length>cap ? " \u2014 showing first "+cap : "")+" \u00b7 "+ms+"\u2009ms</div>";
+      });
+      out.innerHTML = h;
+    }catch(e){
+      out.innerHTML = '<div class="err">'+esc(e.message)+"</div>";
+    }
+  });
+}
+function wirePlay(){
+  $("pgRun").addEventListener("click", runSQL);
+  $("pgReset").addEventListener("click", function(){
+    if(!db){ ensureEngine().then(function(ok){ if(ok) toast("Database ready"); }); return; }
+    try{ db.close(); }catch(e){}
+    db = null; engineLoading = null;
+    ensureEngine().then(function(ok){ if(ok){ toast("Database reset \u2713"); $("pgOut").innerHTML=""; } });
+  });
+  $("pgChips").addEventListener("click", function(e){
+    var b = e.target.closest("[data-tbl]");
+    if(!b) return;
+    $("pgSql").value = "SELECT * FROM "+b.getAttribute("data-tbl")+" LIMIT 10;";
+    runSQL();
+  });
+  document.querySelectorAll("[data-sample]").forEach(function(b){
+    b.addEventListener("click", function(){
+      $("pgSql").value = SAMPLES[+b.getAttribute("data-sample")][1];
+      runSQL();
+    });
+  });
+  if(pendingSQL){
+    $("pgSql").value = pendingSQL;
+    pendingSQL = null;
+    runSQL();
+  } else {
+    ensureEngine();
+  }
+}
+
+/* ---------------- 8. Barsetshire seed data ---------------- */
+function genSeed(){
+  function mulberry32(a){ return function(){ a|=0; a = a+0x6D2B79F5|0; var t = Math.imul(a^a>>>15, 1|a); t = t+Math.imul(t^t>>>7, 61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  var R = mulberry32(20260704);
+  function ri(a,b){ return a+Math.floor(R()*(b-a+1)); }
+  function pick(arr){ return arr[Math.floor(R()*arr.length)]; }
+  function ch(p){ return R()<p; }
+  var DAY = 86400000;
+  function D(y,m,d){ return Date.UTC(y,m-1,d); }
+  function iso(t){ return new Date(t).toISOString().slice(0,10); }
+  function rdate(a,b){ return a + Math.floor(R()*((b-a)/DAY))*DAY; }
+  function q(s){ return "'"+String(s).replace(/'/g,"''")+"'"; }
+
+  var W0 = D(2024,4,1), W1 = D(2026,3,31);
+
+  // LSOAs - 50 across 6 LA areas
+  var LSOA_DIST = {"Barchester":10,"Millford":8,"Kingsbay":7,"Westfield":8,"Hartmoor":9,"Riverside":8};
+  var lsoas = [], byLA = {};
+  var code = 101;
+  Object.keys(LSOA_DIST).forEach(function(la){
+    byLA[la] = [];
+    for(var i=0;i<LSOA_DIST[la];i++){
+      var l = { code: "E01000"+(code++), dec: ri(1,10), la: la };
+      lsoas.push(l); byLA[la].push(l);
+    }
+  });
+
+  // Practices - 20 practices across 6 LA areas
+  var PNAMES = ["Riverside Surgery","Hilltop Medical Practice","The Meadows Health Centre","Castle Street Surgery","Brookfield Practice","Harbour View Medical","St Aldate's Surgery","Millbrook Family Practice","Kingsgate Health Centre","Fenwick Road Surgery","Old Town Practice","Lakeside Medical Centre","Greenfield Clinic","Oakwood Health","Westgate Medical","Hartwell Medical","Rosewood Surgery","Pinewood Practice","Cedar Medical","Willow Health Centre"];
+  var pracs = PNAMES.map(function(nm, i){
+    var laKeys = Object.keys(byLA);
+    var la = laKeys[i % laKeys.length];
+    return { code: "P810"+String(i+1).padStart(2,"0"), name: nm, la: la, list: ri(2800,13500) };
+  });
+
+  // Patients - expanded to 2500
+  var ETH = ["White British","White British","White British","White British","White British","White Other","Asian or Asian British","Asian or Asian British","Black or Black British","Mixed","Other","Not stated"];
+  var pts = [], pid = 1001;
+  function ageAtDate(bd, ref){ return Math.floor((ref - bd)/DAY/365.25); }
+  function genRiskScore(age, decile){
+    var base = Math.max(20, 100 - age * 0.8);
+    var depMod = (decile - 5) * 2.5;
+    return Math.min(100, Math.max(10, Math.round(base + depMod)));
+  }
+  function genPracType(){
+    var r = R();
+    if (r < 0.65) return "GP";
+    if (r < 0.85) return "DENTAL";
+    return "OVEN";
+  }
+  function addPatient(bd, forceLA){
+    var pr = pick(pracs.filter(function(p){ return !forceLA || p.la===forceLA; }));
+    var pool = byLA[pr.la];
+    var ls = ch(0.25) ? pool[0] : pick(pool);
+    var age = ageAtDate(bd, W1);
+    var regDate = bd + ch(0.3)?0:Math.floor(R()*1825)*DAY; // Within 5 years of birth
+    var p = { 
+      id: pid++, sex: ch(0.51)?"F":"M", bd: bd, eth: pick(ETH),
+      lsoa: ls.code, dec: ls.dec, prac: pr.code,
+      risk_score: genRiskScore(age, ls.dec),
+      registration_date: iso(regDate),
+      practice_type: genPracType(),
+      adm: [] 
+    };
+    pts.push(p); return p;
+  }
+  // Age distribution for ~1500 patients
+  var i;
+  for(i=0;i<200;i++) addPatient(rdate(D(2023,4,1), D(2024,3,31)));          // capstone-B cohort
+  for(i=0;i<100;i++) addPatient(rdate(D(2009,1,1), D(2023,3,1)));            // other children
+  for(i=0;i<500;i++) addPatient(rdate(D(1956,1,1), D(2005,12,31)));         // adults
+  for(i=0;i<400;i++) addPatient(rdate(D(1934,1,1), D(1955,12,31)));         // elderly
+  for(i=0;i<300;i++) addPatient(rdate(D(1910,1,1), D(1933,12,31)));         // very elderly
+
+  function ageAt(p, t){ return Math.floor((t - p.bd)/DAY/365.25); }
+  var elderly = pts.filter(function(p){ return ageAt(p, W1) >= 70; });
+  var adults  = pts.filter(function(p){ var a = ageAt(p, W1); return a>=21 && a<70; });
+  var kids    = pts.filter(function(p){ return ageAt(p, W1) < 21; });
+
+  // Admissions
+  var SPEC_A = ["General Medicine","Respiratory","Cardiology","Elderly Care","Gastroenterology","Trauma & Orthopaedics","General Surgery","Urology"];
+  var DIAG = {
+    "Respiratory": ["J09X","J10.1","J12.9","J15.9","J18.9","J22","J44.1","J45.9"],
+    "Cardiology": ["I21.9","I50.0","I48.9","I20.9"],
+    "Gastroenterology": ["K52.9","K92.2","K35.8"],
+    "Elderly Care": ["J18.9","N39.0","I50.0","S72.0","R29.6"],
+    "Trauma & Orthopaedics": ["S72.0","S52.5","M16.9"],
+    "Paediatrics": ["J21.9","A08.4","J45.9","J22"],
+    "General Medicine": ["N39.0","E11.9","J18.9","R55","L03.9"],
+    "General Surgery": ["K35.8","K80.2"],
+    "Urology": ["N39.0","N20.0"]
+  };
+  var ICD = {
+    "J09X":"Influenza due to identified zoonotic influenza virus","J10.1":"Influenza with respiratory manifestations, seasonal virus identified",
+    "J12.9":"Viral pneumonia, unspecified","J15.9":"Bacterial pneumonia, unspecified","J18.9":"Pneumonia, unspecified",
+    "J21.9":"Acute bronchiolitis, unspecified","J22":"Acute lower respiratory infection, unspecified","J44.1":"COPD with acute exacerbation",
+    "J45.9":"Asthma, unspecified","I21.9":"Acute myocardial infarction, unspecified","I50.0":"Congestive heart failure",
+    "I48.9":"Atrial fibrillation, unspecified","I20.9":"Angina pectoris, unspecified","K52.9":"Gastroenteritis, unspecified",
+    "K92.2":"Gastrointestinal haemorrhage, unspecified","K35.8":"Acute appendicitis","K80.2":"Calculus of gallbladder without cholecystitis",
+    "N39.0":"Urinary tract infection, site not specified","N20.0":"Calculus of kidney","E11.9":"Type 2 diabetes mellitus without complications",
+    "R55":"Syncope and collapse","L03.9":"Cellulitis, unspecified","S72.0":"Fracture of neck of femur","S52.5":"Fracture of lower end of radius",
+    "M16.9":"Coxarthrosis, unspecified","R29.6":"Tendency to fall","A08.4":"Viral intestinal infection, unspecified"
+  };
+  var adms = [], aid = 5001;
+  function genSeverity(method, spec, patientRisk){
+    var base = method === "Emergency" ? 40 : 15;
+    var specMod = {"General Medicine":0,"Respiratory":10,"Cardiology":5,"Elderly Care":20,"Gastroenterology":5,"Trauma & Orthopaedics":25,"General Surgery":10,"Urology":5,"Paediatrics":5};
+    var mod = specMod[spec] || 5;
+    return Math.min(100, Math.max(5, Math.round(base + mod + patientRisk*0.3)));
+  }
+  function genOutcome(severity, method){
+    if (method === "Elective") return "Discharged";
+    if (severity > 80) return ch(0.12) ? "Died" : "Discharged";
+    if (severity > 60) return ch(0.06) ? "Died" : "Discharged";
+    return "Discharged";
+  }
+  function addAdmAt(p, t, forceEmerg){
+    if(t > W1 - DAY) return null;
+    var isKid = ageAt(p, t) < 16;
+    var spec = isKid ? "Paediatrics" : pick(SPEC_A);
+    var method = (forceEmerg || ch(0.58)) ? "Emergency" : "Elective";
+    var los = ch(0.18) ? 0 : (ch(0.75) ? ri(1,6) : ri(7,25));
+    var disT = t + los*DAY;
+    var dis = iso(disT);
+    if((t > W1 - 20*DAY && ch(0.5)) || ch(0.015)) { dis = null; disT = null; }
+    var severity = genSeverity(method, spec, p.risk_score);
+    var outcome = genOutcome(severity, method);
+    var a = { 
+      id: aid++, pid: p.id, ad: iso(t), adT: t, dis: dis, disT: disT,
+      method: method, spec: spec, dx: pick(DIAG[spec]),
+      outcome: outcome, severity_score: severity, los_days: los
+    };
+    adms.push(a); p.adm.push(a);
+    return a;
+  }
+  function addAdm(p, forceEmerg){ return addAdmAt(p, rdate(W0, W1 - 2*DAY), forceEmerg); }
+  // Admissions generation - target ~3000
+  var admCount = 0;
+  while(admCount < 3000){
+    var p = pts[ri(0, pts.length-1)];
+    if(addAdm(p, ch(0.7))) admCount++;
+  }
+  // frequent attenders
+  var faPool = elderly.concat(adults);
+  for(i=0;i<80;i++){
+    var fp = faPool[ri(0, faPool.length-1)];
+    var reps = ri(3,6);
+    for(var j2=0;j2<reps;j2++) addAdm(fp, true);
+  }
+  elderly.forEach(function(p){ if(ch(0.80)){ var n = ri(1,3); for(var k=0;k<n;k++) addAdm(p,false); } });
+  adults.forEach(function(p){ if(ch(0.40)){ var n = ri(1,2); for(var k=0;k<n;k++) addAdm(p,false); } });
+  kids.forEach(function(p){ if(ch(0.20)) addAdm(p,false); });
+  // explicit readmission dynamics: some emergency discharges bounce back
+  var idToP = {}; pts.forEach(function(p){ idToP[p.id] = p; });
+  adms.slice().forEach(function(a){
+    if(a.method !== "Emergency" || a.disT === null) return;
+    if(ch(0.18)) addAdmAt(idToP[a.pid], a.disT + ri(1,30)*DAY, true);      // true 30-day readmission
+    else if(ch(0.08)) addAdmAt(idToP[a.pid], a.disT + ri(31,60)*DAY, true); // just-outside boundary case
+  });
+
+  // Vaccinations - expanded with lot numbers
+  var vax = [], vid = 9001;
+  function genLot(){ return "LTK"+String(vid).padStart(6,"0").slice(-6); }
+  function genStaff(){ return "STAFF"+String(vid).padStart(4,"0").slice(-4); }
+  function addVax(p, name, dose, t){ 
+    if(t <= W1 && t >= D(2020,1,1)){
+      vax.push({ 
+        id: vid++, 
+        pid: p.id, 
+        v: name, 
+        d: dose, 
+        t: iso(t),
+        lot: genLot(),
+        staff: genStaff()
+      });
+    }
+  }
+  pts.forEach(function(p){
+    var bornAfter2016 = p.bd >= D(2016,1,1);
+    if(bornAfter2016){
+      var p1 = 0.78 + 0.02*p.dec;
+      if(ch(p1)){
+        var d1 = p.bd + ri(365,430)*DAY;
+        addVax(p, "MMR", 1, d1);
+        var p2 = 0.60 + 0.03*p.dec;
+        if(ch(p2)) addVax(p, "MMR", 2, p.bd + ri(490,850)*DAY);
+      }
+    }
+    if(ageAt(p, W1) >= 64){
+      [2024, 2025].forEach(function(y, si){
+        if(ch(0.52 + 0.015*p.dec)) addVax(p, "Flu", 1, rdate(D(y,9,15), D(y,12,20)));
+        if(ch(0.45)) addVax(p, "COVID-19", si+1, rdate(D(y,9,20), D(y,12,15)));
+      });
+    }
+    // Additional vaccinations for larger population
+    if(ageAt(p, W1) >= 18 && ch(0.30)){
+      addVax(p, "Shingles", 1, rdate(D(2024,1,1), W1));
+    }
+  });
+
+  // Lab results - expanded with flagged values and reference ranges
+  var labs = [], lid = 7001;
+  pts.forEach(function(p){
+    if(ageAt(p, W1) < 40) return;
+    if(ch(0.55)){
+      var v = ch(0.22) ? ri(48,96) : ri(34,46);
+      labs.push({ 
+        id: lid++, 
+        pid: p.id, 
+        test: "HbA1c", 
+        val: v, 
+        u: "mmol/mol", 
+        t: iso(rdate(W0,W1)),
+        ref: "36-47",
+        flagged: v > 48 ? "HIGH" : null
+      });
+    }
+    if(ch(0.50)){
+      var v2 = ch(0.30) ? ri(140,190) : ri(104,138);
+      labs.push({ 
+        id: lid++, 
+        pid: p.id, 
+        test: "Systolic BP", 
+        val: v2, 
+        u: "mmHg", 
+        t: iso(rdate(W0,W1)),
+        ref: "90-119",
+        flagged: v2 >= 140 ? "HIGH" : (v2 < 90 ? "LOW" : null)
+      });
+    }
+    if(ch(0.40)){
+      var v3 = Math.round((3.1 + R()*4.5)*10)/10;
+      labs.push({ 
+        id: lid++, 
+        pid: p.id, 
+        test: "Total cholesterol", 
+        val: v3, 
+        u: "mmol/L", 
+        t: iso(rdate(W0,W1)),
+        ref: "3.1-5.1",
+        flagged: v3 > 5.1 ? "HIGH" : null
+      });
+    }
+    // Additional lab tests for larger dataset
+    if(ch(0.35)){
+      labs.push({ 
+        id: lid++, 
+        pid: p.id, 
+        test: "Glucose", 
+        val: ch(0.30) ? ri(4.0,10.0) : ri(4.0,7.0), 
+        u: "mmol/L", 
+        t: iso(rdate(W0,W1)),
+        ref: "3.9-7.0",
+        flagged: null
+      });
+    }
+  });
+
+  // Deaths - expanded
+  var deaths = [];
+  elderly.forEach(function(p){
+    if(!p.adm.length || !ch(0.15)) return;
+    var lastDis = 0, lastDx = null, open = false;
+    p.adm.forEach(function(a){ if(a.disT===null) open = true; else if(a.disT > lastDis){ lastDis = a.disT; lastDx = a.dx; } });
+    if(open || !lastDis) return;
+    var gap = ch(0.40) ? ri(3,28) : ri(35,400);
+    var dod = lastDis + gap*DAY;
+    if(dod > W1) dod = lastDis + ri(3,20)*DAY;
+    if(dod > W1) return;
+    var path = ch(0.3) ? "/records/"+p.id+"/death_cert.pdf" : "/records/"+p.id+"/death_cert2.pdf";
+    deaths.push({ 
+      pid: p.id, 
+      t: iso(dod), 
+      cause: lastDx || "I50.0",
+      certs_path: path
+    });
+  });
+
+  // LA population - expanded to 6 LA areas
+  var BANDS = [["0-4",0.055],["5-17",0.15],["18-39",0.28],["40-64",0.32],["65-79",0.14],["80+",0.055]];
+  var LAPOP = { 
+    "Barchester":284000, 
+    "Millford":121000, 
+    "Kingsbay":96000,
+    "Westfield":145000,
+    "Hartmoor":98000,
+    "Riverside":112000
+  };
+  var lapop = [];
+  Object.keys(LAPOP).forEach(function(la){
+    BANDS.forEach(function(b){
+      ["F","M"].forEach(function(sx){
+        var skew = (sx==="F" && (b[0]==="65-79"||b[0]==="80+")) ? 1.14 : 1.0;
+        lapop.push({ la: la, sex: sx, band: b[0], pop: Math.round(LAPOP[la]*b[1]*0.5*skew) });
+      });
+    });
+  });
+
+  // Build SQL
+  var sql = [];
+  sql.push("CREATE TABLE patients(patient_id INTEGER PRIMARY KEY, sex TEXT, birth_date TEXT, ethnicity TEXT, lsoa_code TEXT, practice_code TEXT, risk_score INTEGER, registration_date TEXT, practice_type TEXT);");
+  sql.push("CREATE TABLE gp_practices(practice_code TEXT PRIMARY KEY, practice_name TEXT, icb_name TEXT, la_name TEXT, list_size INTEGER, practice_type TEXT, established_date TEXT);");
+  sql.push("CREATE TABLE lsoa_imd(lsoa_code TEXT PRIMARY KEY, imd_decile INTEGER, la_name TEXT, population_estimate INTEGER, urban_rural TEXT);");
+  sql.push("CREATE TABLE admissions(admission_id INTEGER PRIMARY KEY, patient_id INTEGER, admission_date TEXT, discharge_date TEXT, admission_method TEXT, specialty TEXT, primary_diagnosis TEXT, outcome TEXT, severity_score INTEGER, los_days INTEGER);");
+  sql.push("CREATE TABLE icd10_lookup(icd10_code TEXT PRIMARY KEY, description TEXT, category TEXT, seriousness INTEGER, is_chronic INTEGER);");
+  sql.push("CREATE TABLE vaccinations(vaccination_id INTEGER PRIMARY KEY, patient_id INTEGER, vaccine TEXT, dose_number INTEGER, date_given TEXT, lot_number TEXT, administered_by TEXT);");
+  sql.push("CREATE TABLE lab_results(result_id INTEGER PRIMARY KEY, patient_id INTEGER, test TEXT, value REAL, units TEXT, date_taken TEXT, reference_range TEXT, flagged TEXT);");
+  sql.push("CREATE TABLE deaths(patient_id INTEGER PRIMARY KEY, date_of_death TEXT, underlying_cause TEXT, death_certs_path TEXT);");
+  sql.push("CREATE TABLE la_population(la_name TEXT, sex TEXT, age_band TEXT, population INTEGER, deprivation_quintile INTEGER);");
+  function ins(tbl, cols, rows){
+    for(var k=0;k<rows.length;k+=80){
+      sql.push("INSERT INTO "+tbl+"("+cols+") VALUES\n"+rows.slice(k,k+80).join(",\n")+";");
+    }
+  }
+  ins("lsoa_imd","lsoa_code, imd_decile, la_name, population_estimate, urban_rural", lsoas.map(function(l){ 
+    return "("+q(l.code)+","+l.dec+","+q(l.la)+","+Math.round(5000+l.dec*200)+","+q(l.dec<=3?"Urban":"Rural")+")"; 
+  }));
+  ins("gp_practices","practice_code, practice_name, icb_name, la_name, list_size, practice_type, established_date", pracs.map(function(p){ 
+    return "("+q(p.code)+","+q(p.name)+",'Barsetshire ICB',"+q(p.la)+","+p.list+","+q(genPracType())+","+q("2010-01-01")+")"; 
+  }));
+  ins("patients","patient_id, sex, birth_date, ethnicity, lsoa_code, practice_code, risk_score, registration_date, practice_type", pts.map(function(p){ 
+    return "("+p.id+","+q(p.sex)+","+q(iso(p.bd))+","+q(p.eth)+","+q(p.lsoa)+","+q(p.prac)+","+p.risk_score+","+q(p.registration_date)+","+q(p.practice_type)+")"; 
+  }));
+  ins("admissions","admission_id, patient_id, admission_date, discharge_date, admission_method, specialty, primary_diagnosis, outcome, severity_score, los_days",
+    adms.map(function(a){ 
+      return "("+a.id+","+a.pid+","+q(a.ad)+","+(a.dis===null?"NULL":q(a.dis))+","+q(a.method)+","+q(a.spec)+","+q(a.dx)+","+q(a.outcome)+","+a.severity_score+","+a.los_days+")"; 
+    }));
+  ins("icd10_lookup","icd10_code, description, category, seriousness, is_chronic", Object.keys(ICD).map(function(c){ 
+    var cat = c.substring(0,1);
+    return "("+q(c)+","+q(ICD[c])+","+q(cat)+","+ (c.startsWith("I")||c.startsWith("J")?2:1)+","+ (c.startsWith("I")||c.startsWith("J")||c.startsWith("K")?1:0)+")"; 
+  }));
+  ins("vaccinations","vaccination_id, patient_id, vaccine, dose_number, date_given, lot_number, administered_by", vax.map(function(v){ 
+    return "("+v.id+","+v.pid+","+q(v.v)+","+v.d+","+q(v.t)+","+q(v.lot)+","+q(v.staff)+")"; 
+  }));
+  ins("lab_results","result_id, patient_id, test, value, units, date_taken, reference_range, flagged", labs.map(function(l){ 
+    return "("+l.id+","+l.pid+","+q(l.test)+","+l.val+","+q(l.u)+","+q(l.t)+","+q(l.ref)+","+q(l.flagged)+")"; 
+  }));
+  ins("deaths","patient_id, date_of_death, underlying_cause, death_certs_path", deaths.map(function(d){ 
+    return "("+d.pid+","+q(d.t)+","+q(d.cause)+","+q(d.certs_path)+")"; 
+  }));
+  ins("la_population","la_name, sex, age_band, population, deprivation_quintile", lapop.map(function(r){ 
+    var qint = r.deprivation_quintile || r.la === "Barchester" ? 3 : (r.la === "Millford" ? 5 : (r.la === "Kingsbay" ? 2 : 4));
+    return "("+q(r.la)+","+q(r.sex)+","+q(r.band)+","+r.pop+","+qint+")"; 
+  }));
+  return sql.join("\n");
+}
+
+/* ---------------- 9. Routing + wiring ---------------- */
+function route(){
+  var view = $("view"), bnav = $("bnav");
+  var n = routeLesson();
+  var isPlay = location.hash === "#play";
+  if(n){
+    view.innerHTML = lessonHTML(n);
+    bnav.hidden = false;
+    $("topWhere").textContent = "L"+n+" \u00b7 "+LESSONS[n-1].title;
+    document.title = "L"+n+" \u2014 "+LESSONS[n-1].title;
+    var M = document.querySelector('.mod[data-mod="'+LESSONS[n-1].mod+'"]');
+    if(M) M.open = true;
+    syncBnav(n);
+  } else if(isPlay){
+    view.innerHTML = playHTML();
+    bnav.hidden = true;
+    $("topWhere").textContent = "SQL playground";
+    document.title = "SQL playground \u2014 Code for Public Health UK";
+    wirePlay();
+  } else {
+    view.innerHTML = homeHTML();
+    bnav.hidden = true;
+    $("topWhere").textContent = "Welcome";
+    document.title = "Code for Public Health UK \u2014 SQL & R from Zero";
+    var sb = $("startBtn"), hp = $("heroPlay");
+    if(sb) sb.addEventListener("click", function(){ location.hash = "#l/"+firstNotDone(); });
+    if(hp) hp.addEventListener("click", function(){ location.hash = "#play"; });
+  }
+  refreshAll();
+  window.scrollTo(0,0);
+  view.focus({ preventScroll: true });
+}
+function syncBnav(n){
+  var prev = $("prevBtn"), next = $("nextBtn"), doneB = $("doneBtn");
+  prev.disabled = (n<=1);
+  next.textContent = (n>=TOTAL) ? "Finish \u2192" : "Next \u2192";
+  var isDone = done.has(n);
+  doneB.textContent = isDone ? "Completed \u2713 (tap to undo)" : "Mark complete \u2713";
+  doneB.classList.toggle("done-state", isDone);
+}
+$("prevBtn").addEventListener("click", function(){
+  var n = routeLesson();
+  if(n>1) location.hash = "#l/"+(n-1);
+});
+$("nextBtn").addEventListener("click", function(){
+  var n = routeLesson();
+  location.hash = (n>=TOTAL) ? "#home" : "#l/"+(n+1);
+});
+$("doneBtn").addEventListener("click", function(){
+  var n = routeLesson();
+  if(!n) return;
+  if(done.has(n)){ done.delete(n); toast("Marked as not complete"); }
+  else {
+    done.add(n);
+    toast(done.size===TOTAL ? "That's every lesson \u2014 outstanding! \ud83c\udf89" : "Lesson "+n+" complete \u2713");
+  }
+  var tag = $("doneTag");
+  if(tag) tag.textContent = done.has(n) ? "Completed \u2713" : "In progress";
+  syncBnav(n); refreshAll();
+});
+
+/* Delegated interactions inside #view */
+$("view").addEventListener("click", function(e){
+  var t;
+  if((t = e.target.closest("[data-copy]"))){
+    var code = codeStore[+t.getAttribute("data-copy")] || "";
+    var ta = document.createElement("textarea");
+    ta.value = code; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(err){}
+    document.body.removeChild(ta);
+    if(navigator.clipboard) navigator.clipboard.writeText(code).catch(function(){});
+    toast("Copied ✓");
+    return;
+  }
+  if((t = e.target.closest("[data-run]"))){
+    pendingSQL = codeStore[+t.getAttribute("data-run")] || "";
+    location.hash = "#play";
+    return;
+  }
+  if((t = e.target.closest(".opt"))){
+    var qz = t.closest(".quiz");
+    if(!qz || qz.getAttribute("data-answered")) return;
+    qz.setAttribute("data-answered","1");
+    var info = quizStore[+qz.getAttribute("data-qid")];
+    var opts = qz.querySelectorAll(".opt");
+    opts.forEach(function(o){ o.disabled = true; });
+    var ix = +t.getAttribute("data-ix");
+    if(ix === info.ok){ t.classList.add("correct"); }
+    else { t.classList.add("wrong"); if(opts[info.ok]) opts[info.ok].classList.add("correct"); }
+    qz.querySelector(".why").classList.add("show");
+    return;
+  }
+  if((t = e.target.closest(".reveal-btn"))){
+    var qz = t.closest(".quiz");
+    if(!qz) return;
+    var info = quizStore[+qz.getAttribute("data-qid")];
+    var opts = qz.querySelectorAll(".opt");
+    if(info.ok >= 0 && opts[info.ok]){
+      opts.forEach(function(o){ o.disabled = true; });
+      if(!qz.getAttribute("data-answered")) {
+        qz.setAttribute("data-answered","1");
+        if(opts[info.ok]) opts[info.ok].classList.add("correct");
+      }
+    }
+    qz.querySelector(".why").classList.add("show");
+    t.style.display = "none";
+    return;
+  }
+  if((t = e.target.closest(".solbtn"))){
+    var sol = t.parentElement.querySelector(".sol");
+    var show = !sol.classList.contains("show");
+    sol.classList.toggle("show", show);
+    t.textContent = show ? "Hide solution" : "Show solution";
+    return;
+  }
+  if((t = e.target.closest(".osbar button"))){
+    var tabs = t.closest(".ostabs"), k = t.getAttribute("data-os");
+    tabs.querySelectorAll(".osbar button").forEach(function(b){ b.classList.toggle("on", b===t); });
+    tabs.querySelectorAll("[data-ospane]").forEach(function(pn){
+      pn.style.display = pn.getAttribute("data-ospane")===k ? "" : "none";
+    });
+    return;
+  }
+});
+
+/* ---------------- 10. Boot ---------------- */
+$("mapSub").textContent = TOTAL+" lessons \u00b7 "+MODULES.length+" modules";
+buildDrawer();
+window.addEventListener("hashchange", route);
+if(!location.hash) location.hash = "#home";
+route();
+})();
+</script>
+</body>
+</html>
