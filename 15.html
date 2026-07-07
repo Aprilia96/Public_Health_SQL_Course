@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codebook — NVivo 15 Practice Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF1F4; --card:#FFFFFF; --ink:#1E2A32; --ink-soft:#54646E;
+  --line:#D6DEE4; --primary:#14505C; --primary-soft:#E2EEF0;
+  --c1:#E3B341; --c2:#E27D60; --c3:#8E7CC3; --c4:#4FA3A5; --c5:#7CA55B;
+  --danger:#C0564B; --ok:#3E7C48; --ok-bg:#E8F2E9; --bad-bg:#F9E9E7;
+  --radius:14px; --shadow:0 2px 10px rgba(30,42,50,.08);
+  --display:'Fraunces',Georgia,serif; --body:'Public Sans',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:var(--body);background:var(--paper);color:var(--ink);font-size:16px;line-height:1.55;min-height:100vh}
+button{font-family:var(--body);cursor:pointer;border:none;background:none;color:inherit;font-size:inherit;-webkit-tap-highlight-color:transparent}
+button:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--c1);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ---------- layout ---------- */
+.app{display:flex;min-height:100vh}
+.sidebar{width:230px;background:var(--primary);color:#EAF3F4;padding:22px 0;position:sticky;top:0;height:100vh;flex-shrink:0;display:flex;flex-direction:column}
+.brand{padding:0 20px 18px;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:12px}
+.brand h1{font-family:var(--display);font-weight:900;font-size:1.5rem;letter-spacing:.01em}
+.brand p{font-size:.72rem;opacity:.75;letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+.nav-btn{display:flex;align-items:center;gap:12px;width:100%;padding:11px 20px;color:#DCEBEC;font-weight:500;font-size:.95rem;text-align:left;border-left:4px solid transparent;transition:background .15s}
+.nav-btn:hover{background:rgba(255,255,255,.08)}
+.nav-btn.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+.nav-btn .stripe{width:6px;height:22px;border-radius:3px;flex-shrink:0}
+.nav-xp{margin-top:auto;padding:16px 20px;border-top:1px solid rgba(255,255,255,.15);font-size:.8rem}
+.nav-xp .bar{height:8px;background:rgba(255,255,255,.2);border-radius:4px;margin-top:6px;overflow:hidden}
+.nav-xp .bar>div{height:100%;background:var(--c1);border-radius:4px;transition:width .4s}
+.main{flex:1;padding:28px clamp(16px,4vw,48px) 96px;max-width:980px;margin:0 auto;width:100%}
+.view{display:none}.view.on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);font-weight:700;margin-bottom:4px}
+h2.vtitle{font-family:var(--display);font-weight:900;font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:6px}
+.vlead{color:var(--ink-soft);margin-bottom:22px;max-width:60ch}
+
+/* mobile nav */
+.tabbar{display:none}
+@media(max-width:760px){
+  .sidebar{display:none}
+  .main{padding:20px 16px 110px}
+  .tabbar{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--primary);z-index:50;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  .tabbar button{flex:1;color:#CFE3E5;font-size:.62rem;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px}
+  .tabbar button .stripe{width:22px;height:5px;border-radius:3px}
+  .tabbar button.active{color:#fff;background:rgba(255,255,255,.14)}
+}
+
+/* ---------- shared components ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--primary);color:#fff;font-weight:600;padding:11px 20px;border-radius:10px;font-size:.95rem;transition:transform .1s,opacity .15s}
+.btn:hover{opacity:.92}.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent;color:var(--primary);border:1.5px solid var(--primary)}
+.btn.small{padding:7px 14px;font-size:.85rem}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--primary-soft);color:var(--primary)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.statnum{font-family:var(--display);font-weight:900;font-size:2rem;line-height:1.1}
+.statlab{font-size:.78rem;color:var(--ink-soft);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.progressbar{height:10px;background:var(--paper);border-radius:5px;overflow:hidden;border:1px solid var(--line)}
+.progressbar>div{height:100%;border-radius:5px;background:var(--primary);transition:width .4s}
+.toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:88px;background:var(--ink);color:#fff;padding:12px 20px;border-radius:12px;font-weight:600;font-size:.9rem;opacity:0;pointer-events:none;transition:all .3s;z-index:99;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- dashboard ---------- */
+.badgegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+.badge{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 10px;text-align:center;transition:transform .15s}
+.badge .ic{font-size:1.8rem;filter:grayscale(1);opacity:.35}
+.badge.earned .ic{filter:none;opacity:1}
+.badge.earned{border-color:var(--c1);box-shadow:0 0 0 2px rgba(227,179,65,.25)}
+.badge .bn{font-weight:700;font-size:.78rem;margin-top:6px}
+.badge .bd{font-size:.68rem;color:var(--ink-soft);line-height:1.3;margin-top:2px}
+.stripes-deco{display:flex;gap:5px;margin:10px 0 4px}
+.stripes-deco span{width:8px;border-radius:4px;height:34px}
+
+/* ---------- flashcards ---------- */
+.fc-stage{perspective:1200px;margin:8px auto 14px;max-width:520px}
+.fc-card{position:relative;width:100%;min-height:240px;transform-style:preserve-3d;transition:transform .45s;cursor:pointer}
+.fc-card.flipped{transform:rotateY(180deg)}
+.fc-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center}
+.fc-face.back{transform:rotateY(180deg);background:var(--primary);color:#fff;border-color:var(--primary)}
+.fc-term{font-family:var(--display);font-weight:900;font-size:1.7rem}
+.fc-def{font-size:1rem;line-height:1.5}
+.fc-hint{position:absolute;bottom:12px;left:0;right:0;font-size:.72rem;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase}
+.fc-face.back .fc-hint{color:rgba(255,255,255,.6)}
+.fc-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.fc-meta{display:flex;justify-content:space-between;align-items:center;max-width:520px;margin:0 auto 10px;font-size:.82rem;color:var(--ink-soft);font-weight:600}
+.masterdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--line);margin-right:2px}
+.masterdot.on{background:var(--c5)}
+
+/* ---------- quiz ---------- */
+.q-opt{display:block;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:13px 16px;margin-bottom:10px;font-size:.95rem;transition:border-color .15s,background .15s}
+.q-opt:hover{border-color:var(--primary)}
+.q-opt.sel{border-color:var(--primary);background:var(--primary-soft)}
+.q-opt.correct{border-color:var(--ok);background:var(--ok-bg)}
+.q-opt.wrong{border-color:var(--danger);background:var(--bad-bg)}
+.q-expl{border-left:4px solid var(--c4);background:var(--primary-soft);padding:12px 14px;border-radius:0 10px 10px 0;font-size:.9rem;margin:10px 0}
+.q-q{font-weight:700;font-size:1.08rem;margin:8px 0 14px;line-height:1.45}
+
+/* ---------- simulator ---------- */
+.seg{padding:10px 12px;border-radius:10px;margin-bottom:8px;border:1.5px dashed transparent;cursor:pointer;position:relative;padding-left:20px;transition:background .15s}
+.seg:hover{background:var(--primary-soft)}
+.seg.sel{border-color:var(--primary);background:var(--primary-soft)}
+.seg .speaker{font-weight:700;color:var(--primary);font-size:.8rem;letter-spacing:.05em}
+.seg .stripes{position:absolute;left:6px;top:8px;bottom:8px;display:flex;gap:3px}
+.seg .stripes i{width:5px;border-radius:3px;display:block}
+.codechip{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:7px 13px;font-size:.82rem;font-weight:600;margin:0 8px 8px 0;transition:all .15s}
+.codechip .dot{width:10px;height:10px;border-radius:50%}
+.codechip.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.seg-result{font-size:.82rem;margin-top:6px;padding:8px 10px;border-radius:8px}
+.seg-result.good{background:var(--ok-bg);color:var(--ok)}
+.seg-result.part{background:#FBF3DF;color:#8A6A16}
+.seg-result.miss{background:var(--bad-bg);color:var(--danger)}
+.simtabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.simtabs button{padding:8px 15px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);font-weight:600;font-size:.85rem}
+.simtabs button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.photo-region{cursor:pointer;transition:opacity .15s}
+.photo-region:hover{opacity:.8}
+.photo-region.picked{stroke:var(--ink);stroke-width:3;stroke-dasharray:6 4}
+.sharp-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+@media(max-width:560px){.sharp-pair{grid-template-columns:1fr}}
+.sharp-opt{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:14px;font-size:.92rem;text-align:left;transition:border-color .15s}
+.sharp-opt:hover{border-color:var(--primary)}
+.sharp-opt.correct{border-color:var(--ok);background:var(--ok-bg)}
+.sharp-opt.wrong{border-color:var(--danger);background:var(--bad-bg)}
+
+/* ---------- phases ---------- */
+.phase{border:1px solid var(--line);border-radius:var(--radius);background:var(--card);margin-bottom:12px;overflow:hidden}
+.phase-head{display:flex;align-items:center;gap:14px;width:100%;padding:16px 18px;text-align:left}
+.phase-num{font-family:var(--display);font-weight:900;font-size:1.5rem;color:#fff;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.phase-head h3{font-size:1.05rem;font-weight:700}
+.phase-head .tag{font-size:.8rem;color:var(--ink-soft)}
+.phase-body{display:none;padding:0 18px 18px;border-top:1px solid var(--line)}
+.phase.open .phase-body{display:block}
+.phase-body h4{font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--primary);margin:14px 0 6px}
+.phase-body ul{padding-left:20px}
+.phase-body li{margin-bottom:5px;font-size:.92rem}
+.pitfall{border-left:4px solid var(--c2);background:#FBEFEA;padding:10px 12px;border-radius:0 8px 8px 0;font-size:.88rem;margin-top:12px}
+.phase-done{margin-left:auto;font-size:1.3rem}
+
+/* ---------- reference ---------- */
+.reftable{width:100%;border-collapse:collapse;font-size:.88rem}
+.reftable th{background:var(--primary);color:#fff;text-align:left;padding:9px 12px;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase}
+.reftable td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.reftable tr:nth-child(even) td{background:var(--primary-soft)}
+.searchbox{width:100%;padding:12px 16px;border:1.5px solid var(--line);border-radius:12px;font-size:1rem;font-family:var(--body);margin-bottom:14px;background:var(--card)}
+.searchbox:focus{outline:none;border-color:var(--primary)}
+details.flag{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:10px}
+details.flag summary{font-weight:700;cursor:pointer;font-size:.95rem}
+details.flag p{margin-top:8px;font-size:.9rem;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar" aria-label="Main">
+    <div class="brand"><h1>Codebook</h1><p>NVivo 15 practice studio</p></div>
+    <div id="sidenav"></div>
+    <div class="nav-xp">
+      <div id="side-level" style="font-weight:700">Level 1 · Novice Coder</div>
+      <div class="bar"><div id="side-xpbar" style="width:0%"></div></div>
+      <div id="side-xptext" style="opacity:.8;margin-top:4px">0 XP</div>
+    </div>
+  </nav>
+  <main class="main" id="main"></main>
+</div>
+<nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+/* ================= DATA ================= */
+const CODE_COLORS = ['#E3B341','#E27D60','#8E7CC3','#4FA3A5','#7CA55B','#5C7FA3','#C86FA0','#A08050'];
+
+const FLASHCARDS = [
+ ["CAQDAS","Computer-Assisted Qualitative Data Analysis Software — the category of tools NVivo belongs to. It manages and retrieves data; the interpretation stays with you."],
+ ["Code (noun)","A labelled container that gathers every data segment about one idea. Good codes are specific, meaning-bearing phrases."],
+ ["Reference","A single coded segment inside a code — one passage of text or one region of an image."],
+ ["Case","An NVivo container for a unit of analysis, usually one participant, gathering all their transcripts and photos."],
+ ["Attribute","A variable (age band, ward, role) attached to a case through a classification — the backbone for comparison queries."],
+ ["Classification","The 'demographic sheet' type that holds attributes — e.g. a Case Classification called Participant."],
+ ["Memo","A full document written inside NVivo: reflections, decisions, theme definitions. Where the analysis deepens."],
+ ["Annotation","A margin note pinned to one specific data segment — a sticky note, not an essay."],
+ ["Coding stripes","Coloured bars beside a document or image showing what is coded where."],
+ ["In vivo code","A code named with the participant's exact words — keeps analysis grounded in their language."],
+ ["Node","Older NVivo term for a code. Tutorials still say it constantly; NVivo 15 says 'code'."],
+ ["Codebook","The full list of codes with their descriptions; exportable for every supervision meeting."],
+ ["Semantic coding","Coding the explicit, surface meaning of what was said."],
+ ["Latent coding","Coding underlying ideas, assumptions and concepts beneath the surface of the talk."],
+ ["Inductive coding","Codes built up from the data itself, rather than imposed from theory."],
+ ["Deductive coding","Coding shaped by pre-existing theory or the research questions."],
+ ["Theme","A pattern of shared meaning across the data set, organised around a central concept. Not a topic bucket."],
+ ["Thematic map","A diagram of themes, sub-themes and their relationships — NVivo mind maps do this well."],
+ ["Familiarisation","Phase 1 of thematic analysis: deep, immersive reading and viewing of all data before any coding."],
+ ["Reflexivity","Ongoing, documented reflection on how you shape the analysis. In reflexive TA it is a resource, not a bias."],
+ ["Reflexive journal","A dated memo of your reflections, reactions and decisions — the spine of your audit trail."],
+ ["Photo elicitation","Using photographs in interviews to draw out reflection and talk. The talk about the image is usually the primary data."],
+ ["Photovoice","A participatory variant of photo elicitation oriented toward social action."],
+ ["Picture log","The editable description table attached to an image file in NVivo — coded descriptions make images text-searchable."],
+ ["See-also link","An NVivo link connecting related items — e.g. a transcript passage to the photo it discusses."],
+ ["Matrix coding query","A cross-tabulation of codes against codes or attributes. Each cell opens the underlying extracts."],
+ ["Framework matrix","A cases-by-themes grid of written summaries, with the underlying coding visible beside it. Empty cells are information."],
+ ["Saturation","A judgement that the data are rich enough to answer the research question — not a magic number of interviews."],
+ ["Audit trail","Journal + decisions log + dated maps + codebook versions: the record that lets a stranger follow your reasoning."],
+ ["Crosstab query","A fast code-by-attribute table across cases — a one-click pattern check, never a finding by itself."]
+];
+
+const QUIZ = [
+ {q:"In reflexive thematic analysis, themes are best described as…",o:["Patterns that emerge naturally from the data","Topic categories matching the interview questions","Patterns of shared meaning actively constructed by the researcher","Counts of the most frequent words"],a:2,e:"Braun & Clarke explicitly reject 'emergence' — the researcher constructs themes through deep engagement. That subjectivity is a feature to be documented, not a flaw."},
+ {q:"What is the correct order of the six phases?",o:["Code → Familiarise → Review → Construct → Define → Report","Familiarise → Code → Construct → Review → Define → Report","Familiarise → Construct → Code → Define → Review → Report","Code → Construct → Familiarise → Review → Report → Define"],a:1,e:"Familiarise → Code → Construct themes → Review → Define & name → Report. The phases are recursive — writing often sends you back."},
+ {q:"'Hospital food' fails as a theme because…",o:["It is too short","It is a topic, not a patterned meaning","Food cannot be coded in NVivo","It needs a number attached"],a:1,e:"A theme carries a central organising concept — e.g. 'mealtimes as the only controllable part of the day' — not just a subject area."},
+ {q:"A 'reference' in NVivo is…",o:["A citation to literature","One coded segment inside a code","A link between two files","The bibliography export"],a:1,e:"Every passage or image region you code becomes a reference gathered inside that code."},
+ {q:"The older NVivo word for a code is…",o:["Tag","Label","Node","Marker"],a:2,e:"Tutorials and older papers say 'node' — same thing as a code in NVivo 15."},
+ {q:"Cases and attributes exist mainly so you can later…",o:["Colour-code your transcripts","Compare patterns across participant characteristics with matrix/crosstab queries","Anonymise the data automatically","Speed up importing"],a:1,e:"Ten minutes of case setup buys you questions like 'how does waiting differ between inpatients and outpatients?' in one query."},
+ {q:"In vivo coding means…",o:["Coding done live during the interview","Naming a code with the participant's exact words","Coding video files","AI-suggested coding"],a:1,e:"It keeps the codebook grounded in participants' own language — a natural fit for reflexive TA."},
+ {q:"Which is the better initial code?",o:["Communication","Staff","Feeling forgotten between appointments","Negative"],a:2,e:"Codes should be specific, meaning-bearing phrases. Small sharp codes merge easily later; vague ones must be painfully re-split."},
+ {q:"Phase 4 (reviewing themes) checks candidate themes against…",o:["The literature only","The coded extracts, then the entire data set","The supervisor's preferences","Word frequency results"],a:1,e:"Two passes: do the extracts genuinely belong, and do the themes capture the whole data set's important patterns?"},
+ {q:"In photo elicitation, the primary analytic material is usually…",o:["The photograph's pixel data","The participant's talk about the photograph","The researcher's interpretation of the image","The camera metadata"],a:1,e:"The participant's own interpretation outranks the researcher's guess at what the image shows."},
+ {q:"The two-pass routine for coding photographs codes…",o:["Colour then shape","Foreground then background","People then objects","Left half then right half"],a:1,e:"One pass for the focal subject, one for setting and context — kept distinct in the codebook."},
+ {q:"Why write a description in each image's picture log?",o:["NVivo requires it to save","Coded text descriptions make images findable by text search and word frequency","It replaces consent","It compresses the file"],a:1,e:"NVivo's text queries only see text — described images join the searchable corpus."},
+ {q:"A see-also link is used to…",o:["Cite a journal article","Connect a transcript passage to the image it discusses","Link two NVivo projects","Email a colleague"],a:1,e:"It keeps image and talk travelling together through the analysis."},
+ {q:"Memos differ from annotations because memos are…",o:["Shorter","Full documents of reflection; annotations are margin notes on one segment","Only for supervisors","Automatically generated"],a:1,e:"Memo = document-level thinking. Annotation = sticky note on a line."},
+ {q:"Which memo records 'we merged codes X and Y because…'?",o:["Research Journal","Analysis Decisions Log","Picture log","Theme definition memo"],a:1,e:"Every consequential choice goes in the decisions log with a one-line rationale — your audit trail depends on it."},
+ {q:"To find everywhere two codes overlap, use a…",o:["Word frequency query","Coding query","Crosstab","Mind map"],a:1,e:"Coding queries retrieve content by code logic: X AND Y, X NEAR Y."},
+ {q:"A matrix coding cell with 14 references means…",o:["A confirmed finding","A door — read the extracts behind the number","Statistical significance","The theme is complete"],a:1,e:"Reflexive TA reports meaning, not counts. Numbers tell you where to look."},
+ {q:"Best visualisation for documenting how your thematic map evolved:",o:["Word cloud","Dated, exported mind maps at each phase","Pie chart","Hierarchy chart alone"],a:1,e:"A pair of dated maps is visible evidence of analytic development for your methods section."},
+ {q:"A hierarchy chart in Phase 4 can warn you that…",o:["A code is bloated or starving","Your PC is slow","Transcripts are too long","You need more participants"],a:0,e:"Treemap area shows coding volume — one giant code often needs splitting into children."},
+ {q:"Before using NVivo's AI Assistant on hospital data you must…",o:["Update Windows","Confirm ethics approval and data governance permit it, and log the answer","Buy a licence add-on","Ask participants directly"],a:1,e:"Many health approvals restrict data processing; institutions can disable AI at admin level. Ask first, record the answer."},
+ {q:"AI child-code suggestions should be…",o:["Accepted in bulk to save time","Treated as prompts — accept/reject/rename with reasons, logged","Ignored entirely, always","Used instead of familiarisation"],a:1,e:"Uncritical acceptance undermines the reflexivity you must demonstrate. Documented judgement keeps it defensible."},
+ {q:"A framework matrix has…",o:["Codes as rows, queries as columns","Cases as rows, themes as columns, written summaries in cells","Dates as rows, files as columns","Only numbers in cells"],a:1,e:"And the underlying coded content stays visible beside each cell as you write — empty cells are information."},
+ {q:"The project file (.nvp) may live on…",o:["A personal USB stick for backup","Approved, encrypted institutional storage only","Your personal cloud drive","Any password-protected laptop"],a:1,e:"Hospital data stays inside the approved environment. No personal devices, sticks, or clouds."},
+ {q:"You spot a real name that slipped through anonymisation. You…",o:["Quietly delete it yourself","Flag it to your supervisor immediately","Ignore it — it's one word","Post about it in the team chat"],a:1,e:"Report identifier leaks at once and follow the protocol; don't silently alter source data."},
+ {q:"'Small-cell' re-identification risk means…",o:["Fonts that are too small","Rare combinations (condition + ward + age) that could identify someone in a write-up","Low image resolution","Too few codes"],a:1,e:"Even pseudonymised reports can identify people through rare detail combinations — remove or blur them."},
+ {q:"Verbatim transcription differs from intelligent verbatim by…",o:["Being machine-made","Keeping fillers, false starts and non-verbal events","Being anonymised","Using speaker labels"],a:1,e:"Check which convention your transcripts follow — it affects what's available to code."},
+ {q:"Consistent speaker labels (INT, P03) matter because…",o:["They look professional","NVivo can auto-code by speaker and cases assemble cleanly","Ethics requires them","They shrink the file"],a:1,e:"Structure in the transcript becomes power in the software."},
+ {q:"Reflexive TA's stance on second coders is…",o:["Two coders must reach 80% agreement","Discussion enriches interpretation; agreement statistics belong to coding-reliability TA","Second coders are forbidden","Only AI may second-code"],a:1,e:"If a colleague codes too, frame it as interpretive dialogue, not inter-rater reliability arithmetic."},
+ {q:"Which is a red flag in your theme set?",o:["Themes have definition memos","Themes match the topic guide headings","A theme was abandoned in Phase 4","Theme names use participant phrases"],a:1,e:"If themes restate the questions, you've summarised the interview, not analysed the answers. Back to Phase 3."},
+ {q:"Phase 1 familiarisation notes should be…",o:["Formal codes","Casual, curious, question-filled observations","Statistical summaries","Written after coding"],a:1,e:"'Why does P04 keep returning to the corridor photo?' — seeds, not structures."},
+ {q:"Coding inclusively in Phase 2 means…",o:["Coding only the best quotes","A passage can carry several codes, with a little surrounding context kept","Including all participants","Using every colour"],a:1,e:"Generous, overlapping coding gives Phase 3 the raw material to cluster."},
+ {q:"The single feature that makes CAQDAS beat highlighters is…",o:["Spell check","One-click retrieval of every reference in a code","Nicer fonts","Cloud sync"],a:1,e:"Reviewing a theme against all its evidence takes minutes, not days."},
+ {q:"Word clouds are best used for…",o:["Reporting findings","Early familiarisation orientation","Phase 5 theme naming","Ethics documentation"],a:1,e:"Engaging but crude — fine for orientation, never a finding."},
+ {q:"A theme definition memo must state…",o:["The number of references","Central concept, scope, inclusions/exclusions, relation to the question","The font used","Who coded it"],a:1,e:"If you can't define a theme in a couple of sentences, it isn't ready (Phase 5)."},
+ {q:"Photographs are harder to anonymise than text because…",o:["Files are larger","Faces, badges, signage and reflections can all identify people and places","They can't be renamed","NVivo locks them"],a:1,e:"Treat every image as identifiable by default; check consent before any reproduction."},
+ {q:"Your reflexive journal serves the write-up by…",o:["Replacing the findings","Supplying the methods-section audit trail","Counting references","Storing images"],a:1,e:"Dated entries evidence how interpretations developed — trustworthiness in action."},
+ {q:"When one code holds a third of all references, you should…",o:["Delete it","Use it as a parent and split into sharper children","Rename it 'Miscellaneous'","Stop coding"],a:1,e:"Bloated codes hide patterns. Splitting (AI suggestions can help, if approved) restores resolution."},
+ {q:"The phases of reflexive TA are…",o:["Strictly linear — never go back","Recursive — writing and reviewing routinely reshape earlier work","Optional after Phase 3","Done once per transcript"],a:1,e:"Returning to earlier phases is the process working, not failing."}
+];
+
+const SIM_CODES = [
+ {id:0,name:"Waiting as limbo"},
+ {id:1,name:"Feeling forgotten between appointments"},
+ {id:2,name:"Staff kindness in small gestures"},
+ {id:3,name:"Photo as memory anchor"},
+ {id:4,name:"Loss of control over time"},
+ {id:5,name:"Family as buffer"},
+ {id:6,name:"Hospital environment as alien"},
+];
+const SIM_SEGMENTS = [
+ {sp:"INT",t:"You brought a photograph of the corridor outside the clinic. Can you tell me about it?",key:[],why:"Interviewer turns carry no participant meaning — leave them uncoded. Selectivity is a skill."},
+ {sp:"P07",t:"I took it because that corridor is where I've spent most of this year, honestly. You sit there and time just… stops meaning anything.",key:[0,4,3],why:"The corridor photo anchors memory (3); 'time stops meaning anything' is waiting-as-limbo (0) and lost control of time (4)."},
+ {sp:"P07",t:"The chairs all face the same wall. Nobody talks. It doesn't feel like a place for people, if that makes sense.",key:[6,0],why:"'Not a place for people' — the environment as alien (6); the scene itself is the limbo of waiting (0)."},
+ {sp:"P07",t:"Between the appointments, though — that's the worst part. Weeks go by and you hear nothing. You start to wonder if anyone remembers you exist.",key:[1],why:"Explicit statement of feeling forgotten between appointments (1). Textbook semantic coding."},
+ {sp:"P07",t:"My daughter rings the department for me when it gets too much. She translates it all into normal words.",key:[5],why:"Family absorbing and translating the burden — family as buffer (5)."},
+ {sp:"P07",t:"There was one nurse who always waved through the glass when I arrived. Tiny thing. It carried me through some bad mornings.",key:[2],why:"A small gesture with outsized emotional weight — staff kindness in small gestures (2)."},
+ {sp:"INT",t:"What made you photograph the corridor rather than the clinic room itself?",key:[],why:"Interviewer prompt — no code."},
+ {sp:"P07",t:"The room is where things happen. The corridor is where you wait for your life to restart. Looking at the photo now brings the whole year back.",key:[0,4,3],why:"Waiting for life to restart: limbo (0) and time out of one's control (4); the photo 'brings the year back' — memory anchor (3)."}
+];
+
+const PHOTO_REGIONS = [
+ {id:"chair",label:"The empty chair",answer:"fore",why:"The chair is the focal subject the participant photographed and discussed — foreground."},
+ {id:"clock",label:"Wall clock",answer:"back",why:"Context that shapes meaning (time, waiting) but not the focal subject — background."},
+ {id:"window",label:"Window & corridor light",answer:"back",why:"Setting and atmosphere — background pass."},
+ {id:"sign",label:"Ward signage",answer:"back",why:"Background context — and an anonymisation risk to flag if it were legible!"}
+];
+
+const SHARPEN = [
+ ["Communication","Feeling unheard at handover",1],
+ ["Waiting as limbo","Waiting",0],
+ ["Negative emotion","Dreading the phone ringing",1],
+ ["Food","Mealtimes as the only choice left",1],
+ ["Photo shows determination to stay independent","Photo content",0],
+ ["Staff","Kindness in small gestures",1],
+ ["Managing medication feels like a second job","Medication",0],
+ ["Family","Daughter as translator of the system",1]
+];
+
+const PHASES = [
+ {n:1,name:"Familiarisation",tag:"Immerse before you organise",color:"#E3B341",
+  what:"Read every transcript twice, view every image beside the talk about it, and write casual, curious notes. Weak familiarisation produces shallow themes — protect this phase.",
+  nvivo:["Import into structured folders; build cases, classifications, attributes","Read in detail view; annotate striking moments","Write picture-log descriptions for every photo","One document reflection memo per transcript","Optional: word frequency query + word cloud for orientation"],
+  out:"Reflection memo per file · dated journal entries · described picture logs",
+  pit:"Rushing to code on the first read. Resist — read for the story first."},
+ {n:2,name:"Generating initial codes",tag:"Label everything relevant, sharply",color:"#E27D60",
+  what:"Work systematically through the whole data set. Small, sharp, meaning-bearing codes; the same passage can carry several. Expect constant renaming and merging — that's the process working.",
+  nvivo:["Drag-and-drop, right-click coding, Code In Vivo for striking phrases","Code image regions: a foreground pass, then a background pass","Write a description for every code the moment you create it","Keep the code list flat; code everything to cases as you go"],
+  out:"Flat codebook (exported) with descriptions · coding stripes across all files",
+  pit:"Vague one-word codes like 'communication'. Sharpen them — they merge easily later; bloated codes must be painfully re-split."},
+ {n:3,name:"Constructing themes",tag:"From codes to candidate patterns",color:"#8E7CC3",
+  what:"Shift from coding data to organising codes. Cluster codes sharing a central organising concept; a theme is a patterned meaning, not a topic bucket.",
+  nvivo:["Create parents named 'Candidate theme: …' and drag child codes under","Merge duplicates; park orphans under Miscellaneous","Sketch thematic map v1 as a mind map — date and export it","Hierarchy chart to eyeball code volumes","Memo the rationale for every cluster"],
+  out:"Thematic map v1 · reorganised codebook · cluster-rationale memos",
+  pit:"Themes that restate the topic guide headings — you've summarised questions, not analysed answers."},
+ {n:4,name:"Reviewing themes",tag:"Test twice: extracts, then the whole set",color:"#4FA3A5",
+  what:"Pass one: read every theme's references end to end — does each extract genuinely belong? Pass two: re-read the whole data set — do the themes capture what matters? Split, merge, abandon.",
+  nvivo:["Open each theme; read all references with context spread","Coding queries to test overlaps between themes","Matrix coding query: themes × key attributes","Small framework matrix (cases × themes) to test coverage","Log every change in the decisions log"],
+  out:"Thematic map v2+ · framework matrix · decisions-log entries",
+  pit:"Keeping a beloved theme that the data can't support. Abandoning themes is strength, not failure."},
+ {n:5,name:"Defining & naming",tag:"If you can't define it, it isn't ready",color:"#7CA55B",
+  what:"Write a short definition per theme: central concept, scope, inclusions and exclusions, relation to the question. Choose concise, evocative names — participant phrases often win.",
+  nvivo:["One theme definition memo per theme","Shortlist the best illustrative extracts (and consented images)","Final mind map of the theme structure"],
+  out:"Definition memo per theme · final thematic map · extract shortlist",
+  pit:"Names that are labels ('Support') rather than meanings ('Support that arrives only when asked for')."},
+ {n:6,name:"Producing the report",tag:"Writing is analysis",color:"#5C7FA3",
+  what:"Weave vivid extracts into an analytic narrative that argues an answer to the research question. Extracts illustrate; your commentary interprets. Writing routinely sends you back to earlier phases.",
+  nvivo:["Export codebook, matrices, maps; export chosen extracts to Word","Reflexive journal + decisions log supply the methods audit trail","Re-enter NVivo whenever writing exposes a weak theme","Archive the final .nvp per protocol"],
+  out:"Draft findings · methods section with audit trail · archived project",
+  pit:"Paraphrasing extracts instead of interpreting them. If a paragraph only restates the quote, it isn't analysis yet."}
+];
+
+const REFERENCE = [
+ ["Create a project","File → New; save to the approved drive"],
+ ["Import transcripts / images","Import ribbon → Files"],
+ ["Create a code","Organize → Codes → right-click → New Code (write its description!)"],
+ ["Code selected text","Drag onto a code, or right-click → Code (Ctrl+F2)"],
+ ["Code a participant's phrase as a code","Select text → right-click → Code In Vivo"],
+ ["Code part of an image","Open picture → drag a region → right-click → Code"],
+ ["See what's coded where","View ribbon → Coding Stripes / Highlight"],
+ ["Read everything in a code","Double-click the code; spread context as needed"],
+ ["Merge two codes","Drag one onto the other → Merge"],
+ ["Write a reflexive entry","Organize → Memos → Research Journal; date the entry"],
+ ["Attach a note to one line","Select text → right-click → New Annotation"],
+ ["Link a passage to its photo","Select → Links → See Also Link"],
+ ["Find a word everywhere","Explore → Text Search query"],
+ ["Compare themes by attribute","Explore → Matrix Coding (or Crosstab) query"],
+ ["Sketch the thematic map","Explore → Maps → Mind Map"],
+ ["Summarise cases by theme","Create → Framework Matrix"],
+ ["Export the codebook","Share → Export Codebook"]
+];
+
+const REDFLAGS = [
+ ["My codes are one-word topics","Sharpen them into meaning-bearing phrases: 'communication' → 'feeling unheard at handover'."],
+ ["One code holds a third of all references","Use it as a parent and split into children (AI suggestions can help, if approved — review each one)."],
+ ["My themes match the topic guide headings","You've summarised questions, not analysed answers. Return to Phase 3 and cluster by meaning."],
+ ["I can't say what a theme excludes","Its definition memo isn't finished. Central concept, scope, boundaries — write them."],
+ ["I haven't written a journal entry in a week","Stop coding, start reflecting. The journal is your audit trail and your thinking space."],
+ ["I'm tempted to paste data into an outside AI tool","Don't. Hospital data stays in the approved environment; even NVivo's built-in AI needs documented approval."]
+];
+
+const BADGES = [
+ {id:"first",ic:"🌱",name:"First steps",desc:"Earn your first XP"},
+ {id:"quiz1",ic:"📝",name:"Quiz taker",desc:"Finish a quiz round"},
+ {id:"perfect",ic:"💯",name:"Perfectionist",desc:"Score 100% on a quiz round"},
+ {id:"cards10",ic:"🃏",name:"Card shark",desc:"Master 10 flashcards"},
+ {id:"lexicon",ic:"📚",name:"Walking lexicon",desc:"Master every flashcard"},
+ {id:"coder",ic:"🖍️",name:"Transcript coder",desc:"Complete the coding simulator"},
+ {id:"eye",ic:"📷",name:"Analyst's eye",desc:"Complete the photo exercise"},
+ {id:"sharp",ic:"✂️",name:"Sharp namer",desc:"Perfect round of Sharpen the Code"},
+ {id:"map",ic:"🗺️",name:"Cartographer",desc:"Study all six phases"},
+ {id:"streak3",ic:"🔥",name:"On a roll",desc:"3-day study streak"},
+ {id:"streak7",ic:"🏆",name:"Unstoppable",desc:"7-day study streak"},
+ {id:"lvl5",ic:"🎓",name:"Reflexive analyst",desc:"Reach level 5"}
+];
+const LEVELS = ["Novice Coder","Transcript Reader","Careful Coder","Theme Builder","Reflexive Analyst","Framework Weaver","Audit-Trail Ace","Qualitative Virtuoso"];
+const XP_PER_LEVEL = 150;
+
+/* ================= STATE ================= */
+const KEY = "nvivo-study-state-v1";
+let state = {
+  xp:0, badges:[], streak:0, lastDay:null,
+  cards:{}, // term -> consecutive knows (2 = mastered)
+  quizBest:0, quizRounds:0,
+  simDone:false, photoDone:false, sharpBest:0,
+  phasesStudied:[]
+};
+let saveTimer=null;
+async function loadState(){
+  try{
+    const r = await window.storage.get(KEY);
+    if(r && r.value){ state = Object.assign(state, JSON.parse(r.value)); }
+  }catch(e){ /* first run — no saved state */ }
+  touchStreak();
+  renderAll();
+}
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    try{ await window.storage.set(KEY, JSON.stringify(state)); }
+    catch(e){ console.error("Save failed", e); }
+  }, 400);
+}
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function touchStreak(){
+  const t = todayStr();
+  if(state.lastDay === t) return;
+  const y = new Date(Date.now()-864e5).toISOString().slice(0,10);
+  state.streak = (state.lastDay === y) ? state.streak+1 : 1;
+  state.lastDay = t;
+  if(state.streak>=3) award("streak3");
+  if(state.streak>=7) award("streak7");
+  save();
+}
+function level(){ return Math.floor(state.xp/XP_PER_LEVEL)+1; }
+function levelName(){ return LEVELS[Math.min(level()-1, LEVELS.length-1)]; }
+function gainXP(n, msg){
+  state.xp += n;
+  award("first");
+  if(level()>=5) award("lvl5");
+  toast((msg||"Nice!") + "  +" + n + " XP");
+  save(); renderSideXP(); }
+function award(id){
+  if(state.badges.includes(id)) return;
+  state.badges.push(id);
+  const b = BADGES.find(x=>x.id===id);
+  setTimeout(()=>toast(b.ic+" Badge earned: "+b.name), 700);
+  save();
+}
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 2200);
+}
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+/* ================= NAV & VIEWS ================= */
+const VIEWS = [
+ {id:"dash",label:"Dashboard",ic:"#E3B341"},
+ {id:"cards",label:"Flashcards",ic:"#E27D60"},
+ {id:"quiz",label:"Quiz",ic:"#8E7CC3"},
+ {id:"sim",label:"Simulator",ic:"#4FA3A5"},
+ {id:"phases",label:"Six Phases",ic:"#7CA55B"},
+ {id:"ref",label:"Reference",ic:"#5C7FA3"}
+];
+let currentView="dash";
+function buildNav(){
+  const sn=document.getElementById("sidenav"), tb=document.getElementById("tabbar");
+  sn.innerHTML=""; tb.innerHTML="";
+  VIEWS.forEach(v=>{
+    const b=document.createElement("button");
+    b.className="nav-btn"+(v.id===currentView?" active":"");
+    b.innerHTML=`<span class="stripe" style="background:${v.ic}"></span>${v.label}`;
+    b.onclick=()=>go(v.id); sn.appendChild(b);
+    const m=document.createElement("button");
+    m.className=(v.id===currentView?"active":"");
+    m.innerHTML=`<span class="stripe" style="background:${v.ic}"></span>${v.label.split(" ")[0]}`;
+    m.onclick=()=>go(v.id); tb.appendChild(m);
+  });
+}
+function go(id){ currentView=id; buildNav(); renderView(); window.scrollTo({top:0}); }
+function renderSideXP(){
+  const lv=level(), into=state.xp - (lv-1)*XP_PER_LEVEL;
+  document.getElementById("side-level").textContent=`Level ${lv} · ${levelName()}`;
+  document.getElementById("side-xpbar").style.width=(into/XP_PER_LEVEL*100)+"%";
+  document.getElementById("side-xptext").textContent=`${state.xp} XP · ${XP_PER_LEVEL-into} to next level`;
+}
+function renderAll(){ buildNav(); renderSideXP(); renderView(); }
+function renderView(){
+  const m=document.getElementById("main");
+  if(currentView==="dash") m.innerHTML=dashHTML();
+  else if(currentView==="cards"){ m.innerHTML=cardsShell(); renderCard(); }
+  else if(currentView==="quiz"){ m.innerHTML=quizShell(); }
+  else if(currentView==="sim"){ m.innerHTML=simShell(); showSimTab(simTab); }
+  else if(currentView==="phases") m.innerHTML=phasesHTML();
+  else if(currentView==="ref") m.innerHTML=refHTML();
+}
+
+/* ================= DASHBOARD ================= */
+function dashHTML(){
+  const mastered=Object.values(state.cards).filter(v=>v>=2).length;
+  const badgesHTML=BADGES.map(b=>`
+    <div class="badge ${state.badges.includes(b.id)?"earned":""}">
+      <div class="ic">${b.ic}</div><div class="bn">${b.name}</div><div class="bd">${b.desc}</div>
+    </div>`).join("");
+  return `
+  <div class="view on">
+    <div class="eyebrow">Your practice studio</div>
+    <h2 class="vtitle">Welcome back, researcher</h2>
+    <p class="vlead">Everything here rehearses the real internship workflow: NVivo 15, interviews, photo elicitation, and Braun &amp; Clarke's six phases. Progress saves automatically to this device's profile.</p>
+    <div class="stripes-deco">${CODE_COLORS.slice(0,6).map(c=>`<span style="background:${c}"></span>`).join("")}</div>
+    <div class="grid2">
+      <div class="card"><div class="statnum">${state.xp}</div><div class="statlab">Total XP · Level ${level()} ${levelName()}</div>
+        <div class="progressbar" style="margin-top:10px"><div style="width:${(state.xp%XP_PER_LEVEL)/XP_PER_LEVEL*100}%"></div></div></div>
+      <div class="card"><div class="statnum">🔥 ${state.streak}</div><div class="statlab">Day streak</div>
+        <p style="font-size:.82rem;color:var(--ink-soft);margin-top:8px">Open the studio daily to keep it alive.</p></div>
+      <div class="card"><div class="statnum">${mastered}/${FLASHCARDS.length}</div><div class="statlab">Flashcards mastered</div>
+        <div class="progressbar" style="margin-top:10px"><div style="width:${mastered/FLASHCARDS.length*100}%;background:var(--c2)"></div></div></div>
+      <div class="card"><div class="statnum">${state.quizBest}%</div><div class="statlab">Best quiz score · ${state.quizRounds} rounds played</div>
+        <div class="progressbar" style="margin-top:10px"><div style="width:${state.quizBest}%;background:var(--c3)"></div></div></div>
+      <div class="card"><div class="statnum">${state.phasesStudied.length}/6</div><div class="statlab">Phases studied</div>
+        <div class="progressbar" style="margin-top:10px"><div style="width:${state.phasesStudied.length/6*100}%;background:var(--c5)"></div></div></div>
+      <div class="card"><div class="statnum">${(state.simDone?1:0)+(state.photoDone?1:0)+(state.sharpBest===SHARPEN.length?1:0)}/3</div><div class="statlab">Simulator challenges cleared</div>
+        <p style="font-size:.82rem;color:var(--ink-soft);margin-top:8px">Transcript · Photo · Sharpen the Code</p></div>
+    </div>
+    <h3 style="font-family:var(--display);font-weight:700;font-size:1.25rem;margin:22px 0 12px">Badge case</h3>
+    <div class="badgegrid">${badgesHTML}</div>
+    <div style="margin-top:26px"><button class="btn ghost small" onclick="resetAll()">Reset all progress</button></div>
+  </div>`;
+}
+async function resetAll(){
+  if(!confirm("Erase all saved progress? This cannot be undone.")) return;
+  state={xp:0,badges:[],streak:1,lastDay:todayStr(),cards:{},quizBest:0,quizRounds:0,simDone:false,photoDone:false,sharpBest:0,phasesStudied:[]};
+  try{ await window.storage.set(KEY, JSON.stringify(state)); }catch(e){}
+  renderAll(); toast("Progress reset");
+}
+
+/* ================= FLASHCARDS ================= */
+let deck=[], cardIdx=0, flipped=false;
+function buildDeck(){
+  const unmastered=FLASHCARDS.filter(([t])=> (state.cards[t]||0) < 2);
+  deck=(unmastered.length?unmastered:FLASHCARDS.slice()).slice();
+  for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
+  cardIdx=0; flipped=false;
+}
+function cardsShell(){
+  buildDeck();
+  return `<div class="view on">
+    <div class="eyebrow">Glossary drill</div>
+    <h2 class="vtitle">Flashcards</h2>
+    <p class="vlead">Tap to flip. Mark a term <b>Got it</b> twice in a row to master it — mastered cards leave the deck until everything is mastered.</p>
+    <div id="fc-area"></div>
+  </div>`;
+}
+function renderCard(){
+  const area=document.getElementById("fc-area");
+  const mastered=Object.values(state.cards).filter(v=>v>=2).length;
+  if(!deck.length){ area.innerHTML=`<div class="card">Deck empty — refresh the tab.</div>`; return; }
+  const [term,def]=deck[cardIdx];
+  const streakN=state.cards[term]||0;
+  area.innerHTML=`
+    <div class="fc-meta"><span>Card ${cardIdx+1} of ${deck.length}</span>
+      <span>${"".padStart(0)}<span class="masterdot ${streakN>=1?"on":""}"></span><span class="masterdot ${streakN>=2?"on":""}"></span> mastery</span>
+      <span>${mastered}/${FLASHCARDS.length} mastered</span></div>
+    <div class="fc-stage">
+      <div class="fc-card ${flipped?"flipped":""}" id="fc" role="button" tabindex="0" aria-label="Flashcard: ${esc(term)}. Activate to flip.">
+        <div class="fc-face"><div class="fc-term">${esc(term)}</div><div class="fc-hint">tap to flip</div></div>
+        <div class="fc-face back"><div class="fc-def">${esc(def)}</div><div class="fc-hint">tap to flip back</div></div>
+      </div>
+    </div>
+    <div class="fc-actions">
+      <button class="btn ghost" onclick="cardMark(false)">Still learning</button>
+      <button class="btn" onclick="cardMark(true)">Got it</button>
+    </div>`;
+  const fc=document.getElementById("fc");
+  fc.onclick=()=>{flipped=!flipped;fc.classList.toggle("flipped");};
+  fc.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fc.click();}};
+}
+function cardMark(know){
+  const [term]=deck[cardIdx];
+  const prev=state.cards[term]||0;
+  if(know){
+    state.cards[term]=prev+1;
+    if(state.cards[term]===2){ gainXP(5,"Mastered: "+term); }
+    const m=Object.values(state.cards).filter(v=>v>=2).length;
+    if(m>=10) award("cards10");
+    if(m>=FLASHCARDS.length) award("lexicon");
+  } else state.cards[term]=0;
+  save();
+  flipped=false;
+  cardIdx++;
+  if(cardIdx>=deck.length) buildDeck();
+  renderCard();
+}
+
+/* ================= QUIZ ================= */
+let qSet=[], qIdx=0, qScore=0, qAnswered=false;
+function quizShell(){
+  return `<div class="view on">
+    <div class="eyebrow">Test yourself</div>
+    <h2 class="vtitle">Quiz</h2>
+    <p class="vlead">Ten random questions per round from a bank of ${QUIZ.length}, covering methods, the six phases, NVivo skills, images, and hospital ethics. Instant feedback with explanations.</p>
+    <div id="q-area"><div class="card" style="text-align:center;padding:34px">
+      <div style="font-family:var(--display);font-weight:900;font-size:1.3rem;margin-bottom:6px">Ready?</div>
+      <p style="color:var(--ink-soft);margin-bottom:16px">Best score so far: <b>${state.quizBest}%</b> · Rounds played: <b>${state.quizRounds}</b></p>
+      <button class="btn" onclick="startQuiz()">Start a round</button>
+    </div></div>
+  </div>`;
+}
+function startQuiz(){
+  qSet=QUIZ.slice();
+  for(let i=qSet.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[qSet[i],qSet[j]]=[qSet[j],qSet[i]];}
+  qSet=qSet.slice(0,10); qIdx=0; qScore=0; renderQ();
+}
+function renderQ(){
+  qAnswered=false;
+  const q=qSet[qIdx];
+  document.getElementById("q-area").innerHTML=`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;font-size:.8rem;font-weight:700;color:var(--ink-soft)">
+        <span>Question ${qIdx+1} / ${qSet.length}</span><span>Score ${qScore}</span></div>
+      <div class="progressbar" style="margin:8px 0 4px"><div style="width:${qIdx/qSet.length*100}%;background:var(--c3)"></div></div>
+      <div class="q-q">${esc(q.q)}</div>
+      ${q.o.map((o,i)=>`<button class="q-opt" id="opt${i}" onclick="answerQ(${i})">${esc(o)}</button>`).join("")}
+      <div id="q-after"></div>
+    </div>`;
+}
+function answerQ(i){
+  if(qAnswered) return; qAnswered=true;
+  const q=qSet[qIdx];
+  q.o.forEach((_,k)=>{
+    const el=document.getElementById("opt"+k);
+    if(k===q.a) el.classList.add("correct");
+    else if(k===i) el.classList.add("wrong");
+    el.disabled=true;
+  });
+  if(i===q.a){ qScore++; gainXP(10,"Correct"); } else toast("Not quite — read the why");
+  document.getElementById("q-after").innerHTML=`
+    <div class="q-expl"><b>Why:</b> ${esc(q.e)}</div>
+    <button class="btn" onclick="nextQ()">${qIdx+1<qSet.length?"Next question":"Finish round"}</button>`;
+}
+function nextQ(){
+  qIdx++;
+  if(qIdx<qSet.length){ renderQ(); return; }
+  const pct=Math.round(qScore/qSet.length*100);
+  state.quizRounds++; if(pct>state.quizBest) state.quizBest=pct;
+  award("quiz1"); if(pct===100) award("perfect");
+  save();
+  document.getElementById("q-area").innerHTML=`
+    <div class="card" style="text-align:center;padding:34px">
+      <div style="font-size:2.6rem">${pct===100?"🏅":pct>=70?"🎉":"📖"}</div>
+      <div style="font-family:var(--display);font-weight:900;font-size:2rem">${pct}%</div>
+      <p style="color:var(--ink-soft);margin:6px 0 18px">${qScore} of ${qSet.length} correct · best ${state.quizBest}%</p>
+      <button class="btn" onclick="startQuiz()">Another round</button>
+      <button class="btn ghost" style="margin-left:8px" onclick="go('dash')">Dashboard</button>
+    </div>`;
+  renderSideXP();
+}
+
+/* ================= SIMULATOR ================= */
+let simTab="transcript";
+let simSel=null; // selected segment index
+let simAssign={}; // segIdx -> Set of code ids
+let simChecked=false;
+let photoPicks={}; // regionId -> "fore"|"back"
+let photoChecked=false;
+let sharpIdx=0, sharpScore=0, sharpOrder=[];
+
+function simShell(){
+  return `<div class="view on">
+    <div class="eyebrow">Hands-on practice</div>
+    <h2 class="vtitle">Coding Simulator</h2>
+    <p class="vlead">Three challenges built on a <b>fictional</b> photo-elicitation interview (participant P07 discussing a photo of a clinic corridor). Practice the judgement calls before you make them on real data.</p>
+    <div class="simtabs">
+      <button id="st-transcript" onclick="showSimTab('transcript')">1 · Code the transcript ${state.simDone?"✅":""}</button>
+      <button id="st-photo" onclick="showSimTab('photo')">2 · Code the photo ${state.photoDone?"✅":""}</button>
+      <button id="st-sharp" onclick="showSimTab('sharp')">3 · Sharpen the code ${state.sharpBest===SHARPEN.length?"✅":""}</button>
+    </div>
+    <div id="sim-area"></div>
+  </div>`;
+}
+function showSimTab(t){
+  simTab=t;
+  ["transcript","photo","sharp"].forEach(x=>{
+    const b=document.getElementById("st-"+x); if(b) b.classList.toggle("active",x===t);
+  });
+  const a=document.getElementById("sim-area");
+  if(t==="transcript") renderTranscript(a);
+  else if(t==="photo") renderPhoto(a);
+  else renderSharp(a,true);
+}
+
+/* --- transcript coding --- */
+function renderTranscript(a){
+  const segHTML=SIM_SEGMENTS.map((s,i)=>{
+    const assigned=[...(simAssign[i]||[])];
+    const stripes=assigned.map(id=>`<i style="background:${CODE_COLORS[id]}"></i>`).join("");
+    let result="";
+    if(simChecked){
+      const key=new Set(s.key), got=new Set(assigned);
+      const hit=[...got].filter(x=>key.has(x)).length;
+      const extra=[...got].filter(x=>!key.has(x)).length;
+      const cls = (hit===key.size && extra===0) ? "good" : (hit>0 ? "part" : (key.size===0 && extra===0 ? "good":"miss"));
+      const keyNames=s.key.length? s.key.map(id=>SIM_CODES[id].name).join(" · ") : "no code (leave uncoded)";
+      result=`<div class="seg-result ${cls}"><b>Expert key:</b> ${keyNames}<br>${esc(s.why)}</div>`;
+    }
+    return `<div class="seg ${simSel===i?"sel":""}" onclick="selSeg(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')selSeg(${i})">
+      <span class="stripes">${stripes}</span>
+      <span class="speaker">${s.sp}:</span> ${esc(s.t)}${result}</div>`;
+  }).join("");
+  const chips=SIM_CODES.map(c=>{
+    const on=simSel!=null && simAssign[simSel] && simAssign[simSel].has(c.id);
+    return `<button class="codechip ${on?"on":""}" onclick="toggleCode(${c.id})" ${simSel==null||simChecked?"disabled":""}>
+      <span class="dot" style="background:${CODE_COLORS[c.id]}"></span>${esc(c.name)}</button>`;
+  }).join("");
+  a.innerHTML=`
+    <div class="card">
+      <p style="font-size:.9rem;color:var(--ink-soft);margin-bottom:10px"><b>How it works:</b> tap a segment, then tap the codes that fit (a segment can take several — or none). Coding stripes appear on the left, just like NVivo. Check your work against the expert key when done.</p>
+      <div style="margin-bottom:14px">${chips}</div>
+      ${segHTML}
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        ${simChecked
+          ? `<button class="btn" onclick="resetSim()">Try again</button>`
+          : `<button class="btn" onclick="checkSim()">Check my coding</button>
+             <button class="btn ghost small" onclick="resetSim()">Clear</button>`}
+      </div>
+      <div id="sim-score" style="margin-top:10px;font-weight:700"></div>
+    </div>`;
+  if(simChecked) showSimScore();
+}
+function selSeg(i){ if(simChecked) return; simSel=(simSel===i?null:i); showSimTab("transcript"); }
+function toggleCode(id){
+  if(simSel==null||simChecked) return;
+  simAssign[simSel]=simAssign[simSel]||new Set();
+  simAssign[simSel].has(id)?simAssign[simSel].delete(id):simAssign[simSel].add(id);
+  showSimTab("transcript");
+}
+function simScoreCalc(){
+  let pts=0, max=0;
+  SIM_SEGMENTS.forEach((s,i)=>{
+    const key=new Set(s.key), got=simAssign[i]||new Set();
+    max += Math.max(key.size,1);
+    if(key.size===0){ pts += (got.size===0?1:0); return; }
+    let hit=[...got].filter(x=>key.has(x)).length;
+    let extra=[...got].filter(x=>!key.has(x)).length;
+    pts += Math.max(0, hit - extra*0.5);
+  });
+  return {pts:Math.round(pts*10)/10, max};
+}
+function checkSim(){
+  simChecked=true; simSel=null;
+  showSimTab("transcript");
+}
+function showSimScore(){
+  const {pts,max}=simScoreCalc();
+  const pct=Math.round(pts/max*100);
+  const el=document.getElementById("sim-score");
+  el.textContent=`Score: ${pts} / ${max} (${pct}%)`;
+  if(!state._simScoredThisRun){
+    state._simScoredThisRun=true;
+    gainXP(Math.round(pct/4),"Transcript coded");
+    if(pct>=70 && !state.simDone){ state.simDone=true; award("coder"); save(); }
+  }
+}
+function resetSim(){ simAssign={}; simSel=null; simChecked=false; delete state._simScoredThisRun; showSimTab("transcript"); }
+
+/* --- photo exercise --- */
+function renderPhoto(a){
+  const regions=PHOTO_REGIONS.map(r=>{
+    const pick=photoPicks[r.id];
+    let fb="";
+    if(photoChecked){
+      const ok=pick===r.answer;
+      fb=`<div class="seg-result ${ok?"good":"miss"}"><b>${ok?"Correct":"Not quite"} — ${r.answer==="fore"?"foreground":"background"}.</b> ${esc(r.why)}</div>`;
+    }
+    return `<div class="card" style="padding:14px">
+      <b>${esc(r.label)}</b>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="codechip ${pick==="fore"?"on":""}" ${photoChecked?"disabled":""} onclick="pickRegion('${r.id}','fore')"><span class="dot" style="background:${CODE_COLORS[1]}"></span>Foreground pass</button>
+        <button class="codechip ${pick==="back"?"on":""}" ${photoChecked?"disabled":""} onclick="pickRegion('${r.id}','back')"><span class="dot" style="background:${CODE_COLORS[3]}"></span>Background pass</button>
+      </div>${fb}</div>`;
+  }).join("");
+  a.innerHTML=`
+    <div class="card">
+      <p style="font-size:.9rem;color:var(--ink-soft)">P07's photograph, sketched below: an empty chair in a clinic corridor. Published visual-methods practice codes the <b>foreground</b> (focal subject) and <b>background</b> (setting/context) as separate passes. Classify each labelled element.</p>
+      <svg viewBox="0 0 460 250" style="width:100%;max-width:520px;display:block;margin:14px auto;border-radius:12px;background:#DCE6EB" role="img" aria-label="Sketch of a clinic corridor with an empty chair, window, wall clock and ward signage">
+        <rect x="0" y="190" width="460" height="60" fill="#B9C9D1"/>
+        <rect x="300" y="30" width="110" height="110" fill="#F4F8F5" stroke="#8FA6B0" stroke-width="3" class="photo-region" id="pr-window"/>
+        <line x1="355" y1="30" x2="355" y2="140" stroke="#8FA6B0" stroke-width="3"/>
+        <line x1="300" y1="85" x2="410" y2="85" stroke="#8FA6B0" stroke-width="3"/>
+        <circle cx="80" cy="60" r="26" fill="#F4F8F5" stroke="#8FA6B0" stroke-width="3" class="photo-region" id="pr-clock"/>
+        <line x1="80" y1="60" x2="80" y2="44" stroke="#54646E" stroke-width="3"/>
+        <line x1="80" y1="60" x2="92" y2="66" stroke="#54646E" stroke-width="2.5"/>
+        <rect x="150" y="40" width="110" height="30" rx="4" fill="#14505C" class="photo-region" id="pr-sign"/>
+        <rect x="162" y="50" width="60" height="5" rx="2" fill="#DCE6EB"/><rect x="162" y="58" width="40" height="4" rx="2" fill="#DCE6EB" opacity=".7"/>
+        <g class="photo-region" id="pr-chair">
+          <rect x="185" y="120" width="80" height="14" rx="5" fill="#E27D60"/>
+          <rect x="185" y="70" width="14" height="64" rx="5" fill="#E27D60"/>
+          <rect x="192" y="134" width="10" height="58" fill="#B8593F"/>
+          <rect x="248" y="134" width="10" height="58" fill="#B8593F"/>
+        </g>
+        <text x="225" y="230" font-family="sans-serif" font-size="12" fill="#54646E" text-anchor="middle">"The corridor is where you wait for your life to restart." — P07</text>
+      </svg>
+      ${regions}
+      <div style="margin-top:6px;display:flex;gap:10px">
+        ${photoChecked
+          ? `<button class="btn" onclick="resetPhoto()">Try again</button>`
+          : `<button class="btn" onclick="checkPhoto()" ${Object.keys(photoPicks).length<PHOTO_REGIONS.length?"disabled":""}>Check</button>`}
+      </div>
+    </div>`;
+}
+function pickRegion(id,v){ if(photoChecked) return; photoPicks[id]=v; showSimTab("photo"); }
+function checkPhoto(){
+  photoChecked=true;
+  const right=PHOTO_REGIONS.filter(r=>photoPicks[r.id]===r.answer).length;
+  gainXP(right*6,"Photo passes done");
+  if(right===PHOTO_REGIONS.length && !state.photoDone){ state.photoDone=true; award("eye"); save(); }
+  showSimTab("photo");
+}
+function resetPhoto(){ photoPicks={}; photoChecked=false; showSimTab("photo"); }
+
+/* --- sharpen the code --- */
+function renderSharp(a, fresh){
+  if(fresh){ sharpIdx=0; sharpScore=0;
+    sharpOrder=SHARPEN.map((p,i)=>i);
+    for(let i=sharpOrder.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[sharpOrder[i],sharpOrder[j]]=[sharpOrder[j],sharpOrder[i]];}
+  }
+  if(sharpIdx>=SHARPEN.length){
+    const perfect=sharpScore===SHARPEN.length;
+    if(perfect){ if(state.sharpBest<SHARPEN.length){state.sharpBest=SHARPEN.length;} award("sharp"); }
+    else if(sharpScore>state.sharpBest) state.sharpBest=sharpScore;
+    save();
+    a.innerHTML=`<div class="card" style="text-align:center;padding:30px">
+      <div style="font-size:2.4rem">${perfect?"✂️🏅":"✂️"}</div>
+      <div style="font-family:var(--display);font-weight:900;font-size:1.8rem">${sharpScore} / ${SHARPEN.length}</div>
+      <p style="color:var(--ink-soft);margin:6px 0 16px">Sharp codes are meaning-bearing phrases, not topic labels.</p>
+      <button class="btn" onclick="renderSharp(document.getElementById('sim-area'),true)">Play again</button></div>`;
+    return;
+  }
+  const pair=SHARPEN[sharpOrder[sharpIdx]];
+  a.innerHTML=`<div class="card">
+    <div style="display:flex;justify-content:space-between;font-size:.8rem;font-weight:700;color:var(--ink-soft)">
+      <span>Pair ${sharpIdx+1} / ${SHARPEN.length}</span><span>Score ${sharpScore}</span></div>
+    <div class="q-q">Which is the <em>sharper</em> code?</div>
+    <div class="sharp-pair">
+      <button class="sharp-opt" id="sh0" onclick="pickSharp(0)">${esc(pair[0])}</button>
+      <button class="sharp-opt" id="sh1" onclick="pickSharp(1)">${esc(pair[1])}</button>
+    </div>
+    <div id="sh-after"></div></div>`;
+}
+function pickSharp(i){
+  const pair=SHARPEN[sharpOrder[sharpIdx]];
+  const right=pair[2];
+  document.getElementById("sh"+right).classList.add("correct");
+  if(i!==right) document.getElementById("sh"+i).classList.add("wrong");
+  document.getElementById("sh0").disabled=true; document.getElementById("sh1").disabled=true;
+  if(i===right){ sharpScore++; gainXP(5,"Sharp!"); }
+  document.getElementById("sh-after").innerHTML=`
+    <div class="q-expl">Sharp codes carry meaning on their own; topic labels ("${esc(pair[right===0?1:0])}") have to be re-split later.</div>
+    <button class="btn" onclick="sharpIdx++;renderSharp(document.getElementById('sim-area'),false)">Next</button>`;
+}
+
+/* ================= PHASES ================= */
+function phasesHTML(){
+  const items=PHASES.map(p=>{
+    const done=state.phasesStudied.includes(p.n);
+    return `<div class="phase" id="ph${p.n}">
+      <button class="phase-head" onclick="togglePhase(${p.n})" aria-expanded="false">
+        <span class="phase-num" style="background:${p.color}">${p.n}</span>
+        <span><h3>${esc(p.name)}</h3><span class="tag">${esc(p.tag)}</span></span>
+        <span class="phase-done">${done?"✅":""}</span>
+      </button>
+      <div class="phase-body">
+        <p style="font-size:.94rem;margin-top:12px">${esc(p.what)}</p>
+        <h4>In NVivo 15</h4><ul>${p.nvivo.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
+        <h4>Outputs / evidence</h4><p style="font-size:.9rem">${esc(p.out)}</p>
+        <div class="pitfall"><b>Pitfall:</b> ${esc(p.pit)}</div>
+        ${done?"":`<button class="btn small" style="margin-top:14px" onclick="studyPhase(${p.n})">Mark as studied (+15 XP)</button>`}
+      </div>
+    </div>`;
+  }).join("");
+  return `<div class="view on">
+    <div class="eyebrow">Braun &amp; Clarke</div>
+    <h2 class="vtitle">The Six Phases</h2>
+    <p class="vlead">Familiarise → Code → Construct → Review → Define → Report. Tap a phase to open its NVivo playbook. The phases are recursive — going back is the process working.</p>
+    ${items}</div>`;
+}
+function togglePhase(n){ document.getElementById("ph"+n).classList.toggle("open"); }
+function studyPhase(n){
+  if(!state.phasesStudied.includes(n)){
+    state.phasesStudied.push(n);
+    gainXP(15,"Phase "+n+" studied");
+    if(state.phasesStudied.length===6) award("map");
+    save();
+  }
+  renderView();
+  const el=document.getElementById("ph"+n); if(el) el.classList.add("open");
+}
+
+/* ================= REFERENCE ================= */
+function refHTML(){
+  const rows=REFERENCE.map(r=>`<tr><td><b>${esc(r[0])}</b></td><td>${esc(r[1])}</td></tr>`).join("");
+  const flags=REDFLAGS.map(f=>`<details class="flag"><summary>🚩 ${esc(f[0])}</summary><p>${esc(f[1])}</p></details>`).join("");
+  return `<div class="view on">
+    <div class="eyebrow">Quick lookup</div>
+    <h2 class="vtitle">Reference</h2>
+    <p class="vlead">The everyday NVivo 15 (Windows) actions and the self-diagnosis red flags — searchable.</p>
+    <input class="searchbox" placeholder="Search actions… e.g. merge, memo, image" oninput="filterRef(this.value)">
+    <div class="card" style="padding:0;overflow:auto">
+      <table class="reftable" id="reftable"><thead><tr><th>I want to…</th><th>Do this</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>
+    <h3 style="font-family:var(--display);font-weight:700;font-size:1.2rem;margin:20px 0 10px">Red flags to self-diagnose</h3>
+    ${flags}</div>`;
+}
+function filterRef(v){
+  v=v.toLowerCase();
+  document.querySelectorAll("#reftable tbody tr").forEach(tr=>{
+    tr.style.display = tr.textContent.toLowerCase().includes(v)?"":"none";
+  });
+}
+
+/* ================= BOOT ================= */
+buildNav(); renderView();
+loadState();
+</script>
+</body>
+</html>
