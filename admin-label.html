@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phone Shop Label Editor</title>
+<style>
+  :root{
+    --bg:#eef1f6; --panel:#fff; --line:#dde2ec; --muted:#5b6472; --ink:#1A1A2E;
+    --brand:#1B3A8C; --accent:#F47B20;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--ink);
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:40;
+    display:flex; align-items:center; gap:14px;
+    padding:11px 18px; background:var(--brand); color:#fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  .topbar h1{font-size:15px;margin:0;font-weight:800;display:flex;align-items:center;gap:9px;}
+  .topbar h1 .dot{width:12px;height:12px;border-radius:3px;background:var(--accent);}
+  .topbar .spacer{flex:1;}
+  .btn{font:inherit;font-weight:700;font-size:13px;border:none;border-radius:8px;padding:9px 14px;cursor:pointer;}
+  .btn-primary{background:var(--accent);color:#fff;} .btn-primary:hover{background:#e06d12;}
+  .btn-ghost{background:rgba(255,255,255,.14);color:#fff;} .btn-ghost:hover{background:rgba(255,255,255,.24);}
+
+  .framewarn{background:#fff4e6;color:#8a4b0a;border-bottom:1px solid #f2c48a;padding:10px 18px;font-size:13px;font-weight:600;line-height:1.4;}
+  .framewarn b{color:#6a3a06;}
+
+  /* ---------- master positioning editor ---------- */
+  .master-editor{
+    background:#f6f8fc; border-bottom:1px solid var(--line);
+    padding:16px 18px; display:flex; gap:20px; align-items:center; justify-content:center;
+    position:sticky; top:57px; z-index:30;
+  }
+  .master-editor .stage-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .master-stage{position:relative;}
+  .master-editor .caption{font-size:12px;color:var(--muted);font-weight:600;max-width:320px;line-height:1.45;}
+  .master-editor .caption b{color:var(--ink);}
+  .master-label{position:absolute;top:0;left:0;transform-origin:top left;}
+
+  /* ---------- layout ---------- */
+  .layout{display:grid;grid-template-columns:430px 1fr;align-items:start;}
+  .controls{height:calc(100vh - 57px - 220px);min-height:360px;overflow-y:auto;padding:18px;border-right:1px solid var(--line);background:var(--panel);}
+  .section{margin-bottom:24px;}
+  .section > h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 11px;font-weight:800;display:flex;align-items:center;gap:8px;}
+  .section > h2::before{content:"";width:14px;height:2px;background:var(--accent);border-radius:2px;}
+
+  .field{margin-bottom:11px;}
+  .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;}
+  input[type=text],input[type=number],textarea,select{
+    width:100%;font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fafbfd;color:var(--ink);
+  }
+  textarea{resize:vertical;min-height:48px;line-height:1.35;}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--brand);border-color:var(--brand);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .readout{font-size:13px;font-weight:700;color:var(--brand);background:#eef3ff;border:1px solid #d5e0fb;border-radius:8px;padding:8px 11px;margin:6px 0 2px;}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;}
+  .toggle input{width:16px;height:16px;accent-color:var(--accent);}
+  .hint{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px;}
+
+  /* field style table */
+  table.ftab{width:100%;border-collapse:collapse;font-size:12px;}
+  table.ftab th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:800;padding:4px 3px;text-align:center;}
+  table.ftab th:first-child,table.ftab td:first-child{text-align:left;}
+  table.ftab td{padding:3px;}
+  table.ftab td.nm{font-weight:700;color:var(--ink);white-space:nowrap;}
+  table.ftab input[type=number]{padding:5px 4px;font-size:12px;text-align:center;}
+  table.ftab input[type=color]{width:30px;height:28px;border:1px solid var(--line);border-radius:6px;padding:1px;background:#fff;cursor:pointer;}
+  table.ftab input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);}
+  .colcell{display:flex;justify-content:center;}
+
+  .bandrow{display:grid;grid-template-columns:22px 1fr 44px 54px;gap:8px;align-items:center;margin-bottom:9px;}
+  .bandrow input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);}
+  .bandrow .bl{font-size:12px;font-weight:700;color:var(--ink);}
+  .bandrow input[type=color]{width:44px;height:30px;border:1px solid var(--line);border-radius:6px;padding:1px;background:#fff;cursor:pointer;}
+  .bandrow input[type=number]{padding:5px;font-size:12px;}
+  .minihdr{display:grid;grid-template-columns:22px 1fr 44px 54px;gap:8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:800;margin-bottom:6px;padding-left:2px;}
+
+  /* entry cards */
+  .entry{border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:11px;background:#fbfcfe;}
+  .entry-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;}
+  .entry-head .tag{font-size:11px;font-weight:800;color:#fff;background:var(--brand);padding:3px 8px;border-radius:20px;}
+  .entry .del{border:none;background:none;color:#c0392b;font-weight:800;font-size:12px;cursor:pointer;}
+  .addbtn{width:100%;border:1.5px dashed var(--brand);background:#f2f5ff;color:var(--brand);font:inherit;font-weight:800;font-size:13px;padding:11px;border-radius:10px;cursor:pointer;}
+  .addbtn:hover{background:#e7edff;}
+
+  /* ---------- preview ---------- */
+  .preview-wrap{
+    height:calc(100vh - 57px - 220px);min-height:360px;overflow:auto;padding:24px;
+    background:linear-gradient(45deg,#e4e8f0 25%,transparent 25%,transparent 75%,#e4e8f0 75%),
+               linear-gradient(45deg,#e4e8f0 25%,#eef1f6 25%,#eef1f6 75%,#e4e8f0 75%);
+    background-size:22px 22px;background-position:0 0,11px 11px;
+    display:flex;justify-content:center;align-items:flex-start;
+  }
+
+  /* ---------- A4 sheet & labels ---------- */
+  .sheet{flex:0 0 auto;width:210mm;height:297mm;background:#fff;box-shadow:0 6px 30px rgba(0,0,0,.18);position:relative;box-sizing:border-box;display:grid;justify-content:center;align-content:center;}
+  .label{background:#fff;border:0.4mm solid #C9CDD6;overflow:hidden;position:relative;}
+  .label.empty{border-style:dashed;}
+  .label.empty > *{visibility:hidden;}
+
+  .band{position:absolute;left:0;right:0;z-index:1;}
+  .band-h{top:0;} .band-f{bottom:0;} .band-d{left:0;right:0;}
+
+  .fld{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;text-align:center;z-index:2;line-height:1.05;}
+  .fld-price{display:flex;align-items:baseline;gap:.4mm;}
+  .fld-desc{white-space:normal;line-height:1.2;}
+  .fld-storage{border-radius:20mm;}
+
+  .master .fld{cursor:grab;}
+  .master .fld:hover{outline:1px dashed rgba(0,0,0,.45);outline-offset:1px;}
+  .master .fld.ph{opacity:.4;font-style:italic;}
+  .master .fld.grabbing{cursor:grabbing;outline:1.5px solid var(--accent);}
+
+  /* cut guides */
+  .guides{position:absolute;inset:0;pointer-events:none;z-index:5;}
+  .guides .v{position:absolute;width:0;border-left:0.3mm dashed rgba(120,130,150,.75);}
+  .guides .h{position:absolute;height:0;border-top:0.3mm dashed rgba(120,130,150,.75);}
+
+  @page{size:A4;margin:0;}
+  @media print{
+    body{background:#fff !important;}
+    .topbar,.controls,.master-editor,.framewarn{display:none !important;}
+    .layout{display:block !important;}
+    .preview-wrap{display:block !important;padding:0 !important;height:auto !important;min-height:0 !important;overflow:visible !important;background:#fff !important;}
+    .sheet{box-shadow:none !important;margin:0 auto !important;}
+  }
+  @media (max-width:920px){
+    .layout{grid-template-columns:1fr;}
+    .controls{height:auto;border-right:none;border-bottom:1px solid var(--line);}
+    .preview-wrap{height:auto;}
+    .sheet{transform:scale(.6);transform-origin:top center;margin-bottom:-118mm;}
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <h1><span class="dot"></span> Phone Shop Label Editor</h1>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" id="resetBtn">Reset</button>
+    <button class="btn btn-primary" id="printBtn">Print / Save PDF</button>
+  </div>
+
+  <div class="framewarn" id="framewarn" style="display:none;">
+    Printing is blocked inside this preview. Open <b>label_editor.html</b> directly in Chrome, Safari or Edge to print. Editing and preview still work here.
+  </div>
+
+  <!-- ===== MASTER POSITIONING EDITOR (top) ===== -->
+  <div class="master-editor">
+    <div class="stage-wrap">
+      <div class="master-stage" id="masterStage">
+        <div class="master-label master label" id="masterLabel"></div>
+      </div>
+    </div>
+    <div class="caption">
+      <b>Drag any field</b> to reposition it. Faint italic text marks empty fields so you can still place them.
+      The layout you set here is copied to <b>every label</b> on the sheet.
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- ===== CONTROLS ===== -->
+    <aside class="controls">
+
+      <div class="section">
+        <h2>Label &amp; sheet</h2>
+        <div class="row2">
+          <div class="field"><label>Label width (mm)</label><input type="number" id="labelW" value="50" min="20" max="210" step="1"></div>
+          <div class="field"><label>Label height (mm)</label><input type="number" id="labelH" value="70" min="20" max="297" step="1"></div>
+        </div>
+        <div class="field"><label>Corner radius (mm) — set 0 for straight-cut edges</label><input type="number" id="labelRadius" value="0" min="0" max="20" step="0.5"></div>
+        <div class="row2">
+          <div class="field"><label>Gap between labels (mm)</label><input type="number" id="gap" value="0" min="0" max="40" step="0.5"></div>
+          <div class="field"><label>Page margin (mm)</label><input type="number" id="pageMargin" value="0" min="0" max="40" step="0.5"></div>
+        </div>
+        <div class="readout" id="readout"></div>
+        <label class="toggle"><input type="checkbox" id="fillSheet" checked> Repeat entries to fill the sheet</label>
+        <label class="toggle"><input type="checkbox" id="showGuides" checked> Show dashed cut guides</label>
+      </div>
+
+      <div class="section">
+        <h2>Font</h2>
+        <div class="field">
+          <label>Typeface (applies to all fields)</label>
+          <select id="fontFamily">
+            <option value="Helvetica, Arial, sans-serif">Helvetica / Arial</option>
+            <option value="Verdana, Geneva, sans-serif">Verdana</option>
+            <option value="Tahoma, Geneva, sans-serif">Tahoma</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+            <option value="'Times New Roman', Times, serif">Times New Roman</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="Impact, Haettenschweiler, sans-serif">Impact</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Fields — position, size &amp; colour</h2>
+        <table class="ftab">
+          <thead><tr><th>Field</th><th>On</th><th>X %</th><th>Y %</th><th>Size</th><th>Colour</th></tr></thead>
+          <tbody id="ftabBody"></tbody>
+        </table>
+        <p class="hint">X/Y update as you drag in the editor above. Size is in points; the £ symbol auto-scales to half the price size.</p>
+      </div>
+
+      <div class="section">
+        <h2>Bands &amp; fills</h2>
+        <div class="minihdr"><span>On</span><span>Band</span><span>Size</span><span>Colour</span></div>
+        <div class="bandrow">
+          <input type="checkbox" id="bh_on" checked><span class="bl">Header band</span>
+          <input type="number" id="bh_h" value="20" min="0" max="120" step="0.5" title="height mm">
+          <input type="color" id="bh_c" value="#1B3A8C">
+        </div>
+        <div class="bandrow">
+          <input type="checkbox" id="bd_on" checked><span class="bl">Divider strip</span>
+          <input type="number" id="bd_h" value="1.4" min="0" max="20" step="0.2" title="height mm">
+          <input type="color" id="bd_c" value="#F47B20">
+        </div>
+        <div class="bandrow">
+          <input type="checkbox" id="bf_on" checked><span class="bl">Footer band</span>
+          <input type="number" id="bf_h" value="8" min="0" max="120" step="0.5" title="height mm">
+          <input type="color" id="bf_c" value="#F47B20">
+        </div>
+        <div class="bandrow">
+          <input type="checkbox" checked disabled><span class="bl">Storage pill fill</span>
+          <span></span>
+          <input type="color" id="pill_c" value="#2E5BD8">
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Shared text</h2>
+        <div class="field"><label>Top banner line</label><input type="text" id="t_eyebrow" value=""></div>
+        <div class="row2">
+          <div class="field"><label>Price intro word</label><input type="text" id="t_only" value=""></div>
+          <div class="field"><label>Currency symbol</label><input type="text" id="t_currency" value="£" maxlength="3"></div>
+        </div>
+        <div class="field"><label>Bottom banner line</label><input type="text" id="t_footer" value=""></div>
+      </div>
+
+      <div class="section">
+        <h2>Labels (your phones)</h2>
+        <div id="entries"></div>
+        <button class="addbtn" id="addBtn">+ Add another phone</button>
+      </div>
+
+      <p class="hint">To print: open the file in a browser, click <b>Print / Save PDF</b>, choose <b>A4</b>, margins <b>None</b>, scale <b>100%</b>, and tick <b>Background graphics</b>.</p>
+    </aside>
+
+    <!-- ===== PREVIEW ===== -->
+    <main class="preview-wrap"><div class="sheet" id="sheet"></div></main>
+  </div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const esc = s => String(s==null?'':s).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+
+const FIELD_KEYS = ['eyebrow','name','storage','only','price','desc','footer'];
+const FIELD_LABELS = {eyebrow:'Banner',name:'Phone name',storage:'Storage',only:'Intro word',price:'Price',desc:'Description',footer:'Footer'};
+const PLACEHOLDER = {eyebrow:'BANNER',name:'Phone name',storage:'Storage',only:'ONLY',price:'000',desc:'Description line',footer:'FOOTER'};
+
+function defaultState(){
+  return {
+    labelW:50, labelH:70, labelRadius:0, gap:0, pageMargin:0, fillSheet:true, showGuides:true,
+    font:"Helvetica, Arial, sans-serif",
+    currency:'£',
+    text:{eyebrow:'', only:'', footer:''},
+    bands:{
+      header:{on:true,h:20,c:'#1B3A8C'},
+      divider:{on:true,h:1.4,c:'#F47B20'},
+      footer:{on:true,h:8,c:'#F47B20'},
+      pill:'#2E5BD8'
+    },
+    fields:{
+      eyebrow:{on:true,x:50,y:9,  size:7,  color:'#FFB067'},
+      name:   {on:true,x:50,y:20, size:13, color:'#FFFFFF'},
+      storage:{on:true,x:50,y:43, size:10, color:'#FFFFFF'},
+      only:   {on:true,x:50,y:57, size:8,  color:'#1A1A2E'},
+      price:  {on:true,x:50,y:70, size:40, color:'#F47B20'},
+      desc:   {on:true,x:50,y:86, size:7.5,color:'#3A4152'},
+      footer: {on:true,x:50,y:96, size:8,  color:'#FFFFFF'}
+    },
+    entries:[ {name:'',storage:'',price:'',desc:''} ]
+  };
+}
+let state = defaultState();
+let dragging = null;
+
+/* ---------- grid maths (honours gap + page margin) ---------- */
+function layout(){
+  const W=state.labelW, H=state.labelH, G=state.gap, M=state.pageMargin;
+  const uW=210-2*M, uH=297-2*M;
+  const c=Math.max(1, Math.floor((uW+G)/(W+G)));
+  const r=Math.max(1, Math.floor((uH+G)/(H+G)));
+  const gW=c*W+(c-1)*G, gH=r*H+(r-1)*G;
+  const x0=(210-gW)/2, y0=(297-gH)/2;
+  return {W,H,G,M,c,r,n:c*r,gW,gH,x0,y0};
+}
+
+/* ---------- one label's inner HTML ---------- */
+function bandsHTML(){
+  const B=state.bands; let h='';
+  if(B.header.on)  h+=`<div class="band band-h" style="height:${B.header.h}mm;background:${B.header.c}"></div>`;
+  if(B.divider.on) h+=`<div class="band band-d" style="top:${(B.header.on?B.header.h:0)}mm;height:${B.divider.h}mm;background:${B.divider.c}"></div>`;
+  if(B.footer.on)  h+=`<div class="band band-f" style="height:${B.footer.h}mm;background:${B.footer.c}"></div>`;
+  return h;
+}
+function fieldHTML(key, entry, forMaster){
+  const f = state.fields[key];
+  if(!f.on) return '';
+  let raw;
+  if(key==='eyebrow') raw = state.text.eyebrow;
+  else if(key==='only') raw = state.text.only;
+  else if(key==='footer') raw = state.text.footer;
+  else if(key==='price') raw = entry.price;
+  else raw = entry[key];
+
+  let ph=false, inner;
+  if(key==='price'){
+    let amt = raw;
+    if(!String(amt).trim() && forMaster){ amt = PLACEHOLDER.price; ph=true; }
+    const cur = esc(state.currency);
+    const curSize = Math.round(f.size*0.5*10)/10;
+    inner = `<span class="cur" style="font-size:${curSize}pt">${cur}</span><span style="font-size:${f.size}pt">${esc(amt)}</span>`;
+  } else {
+    let txt = raw;
+    if(!String(txt).trim() && forMaster){ txt = PLACEHOLDER[key]; ph=true; }
+    inner = esc(txt);
+  }
+
+  let extra='';
+  if(key==='storage') extra=`background:${state.bands.pill};padding:1mm 4mm;`;
+  if(key==='desc')    extra=`max-width:${Math.max(10,state.labelW-6)}mm;`;
+  const sizeStyle = (key==='price') ? '' : `font-size:${f.size}pt;`;
+
+  const cls = `fld fld-${key}${ph?' ph':''}`;
+  const style = `left:${f.x}%;top:${f.y}%;font-family:${state.font};font-weight:800;color:${f.color};${sizeStyle}${extra}`;
+  return `<div class="${cls}" data-key="${key}" style="${style}">${inner}</div>`;
+}
+function labelInner(entry, forMaster){
+  return bandsHTML() + FIELD_KEYS.map(k=>fieldHTML(k,entry,forMaster)).join('');
+}
+
+/* ---------- master editor ---------- */
+function renderMaster(){
+  if(dragging) return;              // don't rebuild while dragging
+  const stage=$('masterStage'), lab=$('masterLabel');
+  const pxW = state.labelW*96/25.4, pxH = state.labelH*96/25.4;
+  const Z = Math.min(300/pxW, 360/pxH, 3.2);
+  stage.style.width  = (pxW*Z)+'px';
+  stage.style.height = (pxH*Z)+'px';
+  lab.style.width = state.labelW+'mm';
+  lab.style.height = state.labelH+'mm';
+  lab.style.borderRadius = state.labelRadius+'mm';
+  lab.style.transform = `scale(${Z})`;
+  lab.innerHTML = labelInner(state.entries[0]||{}, true);
+}
+
+/* delegated drag (handler survives rebuilds) */
+$('masterStage').addEventListener('pointerdown', e=>{
+  const t = e.target.closest('.fld'); if(!t) return;
+  dragging = { key:t.dataset.key, el:t };
+  t.classList.add('grabbing');
+  try{ t.setPointerCapture(e.pointerId); }catch(_){}
+  e.preventDefault();
+});
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const lab = $('masterLabel').getBoundingClientRect();
+  const x = clamp((e.clientX-lab.left)/lab.width*100, 0, 100);
+  const y = clamp((e.clientY-lab.top)/lab.height*100, 0, 100);
+  const f = state.fields[dragging.key];
+  f.x = Math.round(x*10)/10; f.y = Math.round(y*10)/10;
+  dragging.el.style.left = f.x+'%';
+  dragging.el.style.top  = f.y+'%';
+  const xi=$('fx_'+dragging.key), yi=$('fy_'+dragging.key);
+  if(xi) xi.value=f.x; if(yi) yi.value=f.y;
+  renderSheet();
+});
+window.addEventListener('pointerup', ()=>{
+  if(dragging){ dragging.el.classList.remove('grabbing'); dragging=null; }
+});
+
+/* ---------- sheet ---------- */
+function renderSheet(){
+  const sheet=$('sheet'); const L=layout(); const {c,r,n,W,H,G,M,gW,gH,x0,y0}=L;
+  sheet.style.gridTemplateColumns = `repeat(${c}, ${W}mm)`;
+  sheet.style.gridTemplateRows    = `repeat(${r}, ${H}mm)`;
+  sheet.style.columnGap = `${G}mm`;
+  sheet.style.rowGap    = `${G}mm`;
+
+  const dim = `width:${W}mm;height:${H}mm;border-radius:${state.labelRadius}mm`;
+  const cells=[];
+  for(let i=0;i<n;i++){
+    if(state.fillSheet){
+      const e = state.entries[i % state.entries.length] || {};
+      cells.push(`<div class="label" style="${dim}">${labelInner(e,false)}</div>`);
+    } else if(i < state.entries.length){
+      cells.push(`<div class="label" style="${dim}">${labelInner(state.entries[i],false)}</div>`);
+    } else {
+      cells.push(`<div class="label empty" style="${dim}"></div>`);
+    }
+  }
+
+  // cut guides — drawn at BOTH edges of every label (so gutters are cut away cleanly)
+  let guides='';
+  if(state.showGuides){
+    const rnd=v=>Math.round(v*1000)/1000;
+    const xs=new Set(), ys=new Set();
+    for(let i=0;i<c;i++){ const l=x0+i*(W+G); xs.add(rnd(l)); xs.add(rnd(l+W)); }
+    for(let j=0;j<r;j++){ const t=y0+j*(H+G); ys.add(rnd(t)); ys.add(rnd(t+H)); }
+    const over=2;
+    const vTop=Math.max(0,y0-over), vLen=Math.min(297,y0+gH+over)-vTop;
+    const hLeft=Math.max(0,x0-over), hLen=Math.min(210,x0+gW+over)-hLeft;
+    let g='<div class="guides">';
+    xs.forEach(x=>{ g+=`<span class="v" style="left:${x}mm;top:${vTop}mm;height:${vLen}mm"></span>`; });
+    ys.forEach(y=>{ g+=`<span class="h" style="top:${y}mm;left:${hLeft}mm;width:${hLen}mm"></span>`; });
+    g+='</div>'; guides=g;
+  }
+  sheet.innerHTML = cells.join('') + guides;
+
+  let ro = `${c} × ${r} = ${n} labels per A4 · ${W} × ${H} mm each`;
+  if(G>0) ro += ` · ${G}mm gap`;
+  if(M>0) ro += ` · ${M}mm margin`;
+  $('readout').textContent = ro;
+}
+
+/* ---------- render everything ---------- */
+function renderAll(){ renderMaster(); renderSheet(); }
+
+/* ---------- build the fields table ---------- */
+function buildFieldTable(){
+  const body=$('ftabBody'); body.innerHTML='';
+  FIELD_KEYS.forEach(k=>{
+    const f=state.fields[k];
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="nm">${FIELD_LABELS[k]}</td>
+      <td style="text-align:center"><input type="checkbox" id="fo_${k}" ${f.on?'checked':''}></td>
+      <td><input type="number" id="fx_${k}" value="${f.x}" min="0" max="100" step="0.5"></td>
+      <td><input type="number" id="fy_${k}" value="${f.y}" min="0" max="100" step="0.5"></td>
+      <td><input type="number" id="fs_${k}" value="${f.size}" min="3" max="120" step="0.5"></td>
+      <td><div class="colcell"><input type="color" id="fc_${k}" value="${f.color}"></div></td>`;
+    body.appendChild(tr);
+  });
+  FIELD_KEYS.forEach(k=>{
+    $('fo_'+k).addEventListener('change',e=>{state.fields[k].on=e.target.checked;renderAll();});
+    $('fx_'+k).addEventListener('input',e=>{state.fields[k].x=clamp(+e.target.value||0,0,100);renderAll();});
+    $('fy_'+k).addEventListener('input',e=>{state.fields[k].y=clamp(+e.target.value||0,0,100);renderAll();});
+    $('fs_'+k).addEventListener('input',e=>{state.fields[k].size=Math.max(3,+e.target.value||3);renderAll();});
+    $('fc_'+k).addEventListener('input',e=>{state.fields[k].color=e.target.value;renderAll();});
+  });
+}
+
+/* ---------- entries ---------- */
+function buildEntries(){
+  const wrap=$('entries'); wrap.innerHTML='';
+  state.entries.forEach((en,i)=>{
+    const card=document.createElement('div'); card.className='entry';
+    card.innerHTML=`
+      <div class="entry-head"><span class="tag">Label ${i+1}</span><button class="del" data-i="${i}">Remove</button></div>
+      <div class="field"><label>Phone name</label><input type="text" data-i="${i}" data-k="name" value="${esc(en.name).replace(/"/g,'&quot;')}"></div>
+      <div class="row2">
+        <div class="field"><label>Storage</label><input type="text" data-i="${i}" data-k="storage" value="${esc(en.storage).replace(/"/g,'&quot;')}"></div>
+        <div class="field"><label>Price (number)</label><input type="text" data-i="${i}" data-k="price" value="${esc(en.price).replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div class="field"><label>Description</label><textarea data-i="${i}" data-k="desc">${esc(en.desc)}</textarea></div>`;
+    wrap.appendChild(card);
+  });
+  wrap.querySelectorAll('input[data-k],textarea[data-k]').forEach(el=>{
+    el.addEventListener('input',e=>{state.entries[+e.target.dataset.i][e.target.dataset.k]=e.target.value;renderAll();});
+  });
+  wrap.querySelectorAll('.del').forEach(b=>b.addEventListener('click',e=>{
+    if(state.entries.length===1){alert('Keep at least one label.');return;}
+    state.entries.splice(+e.target.dataset.i,1);buildEntries();renderAll();
+  }));
+}
+
+/* ---------- static control bindings ---------- */
+function bindControls(){
+  $('labelW').addEventListener('input',e=>{state.labelW=clamp(+e.target.value||20,20,210);renderAll();});
+  $('labelH').addEventListener('input',e=>{state.labelH=clamp(+e.target.value||20,20,297);renderAll();});
+  $('labelRadius').addEventListener('input',e=>{state.labelRadius=clamp(+e.target.value||0,0,20);renderAll();});
+  $('gap').addEventListener('input',e=>{state.gap=clamp(+e.target.value||0,0,40);renderSheet();});
+  $('pageMargin').addEventListener('input',e=>{state.pageMargin=clamp(+e.target.value||0,0,40);renderSheet();});
+  $('fillSheet').addEventListener('change',e=>{state.fillSheet=e.target.checked;renderSheet();});
+  $('showGuides').addEventListener('change',e=>{state.showGuides=e.target.checked;renderSheet();});
+  $('fontFamily').addEventListener('change',e=>{state.font=e.target.value;renderAll();});
+
+  $('t_eyebrow').addEventListener('input',e=>{state.text.eyebrow=e.target.value;renderAll();});
+  $('t_only').addEventListener('input',e=>{state.text.only=e.target.value;renderAll();});
+  $('t_footer').addEventListener('input',e=>{state.text.footer=e.target.value;renderAll();});
+  $('t_currency').addEventListener('input',e=>{state.currency=e.target.value;renderAll();});
+
+  const bandBind=(pre,obj)=>{
+    $(pre+'_on').addEventListener('change',e=>{obj.on=e.target.checked;renderAll();});
+    $(pre+'_h') .addEventListener('input', e=>{obj.h=Math.max(0,+e.target.value||0);renderAll();});
+    $(pre+'_c') .addEventListener('input', e=>{obj.c=e.target.value;renderAll();});
+  };
+  bandBind('bh',state.bands.header);
+  bandBind('bd',state.bands.divider);
+  bandBind('bf',state.bands.footer);
+  $('pill_c').addEventListener('input',e=>{state.bands.pill=e.target.value;renderAll();});
+
+  $('addBtn').addEventListener('click',()=>{state.entries.push({name:'',storage:'',price:'',desc:''});buildEntries();renderAll();});
+  $('resetBtn').addEventListener('click',()=>{
+    if(!confirm('Reset everything back to blank defaults?'))return;
+    state=defaultState(); syncAllInputs(); buildFieldTable(); buildEntries(); renderAll();
+  });
+
+  const inFrame = (window.self!==window.top);
+  if(inFrame) $('framewarn').style.display='block';
+  $('printBtn').addEventListener('click',()=>{
+    try{ window.focus(); window.print();
+      if(inFrame) setTimeout(()=>alert("If no print dialog appeared, this page is inside a preview that blocks printing.\n\nOpen 'label_editor.html' directly in your browser, then print (or Ctrl/Cmd+P)."),400);
+    }catch(_){ alert("Open 'label_editor.html' directly in Chrome, Safari or Edge, then print (Ctrl/Cmd+P)."); }
+  });
+}
+
+/* push state -> static inputs (used on reset) */
+function syncAllInputs(){
+  $('labelW').value=state.labelW; $('labelH').value=state.labelH; $('labelRadius').value=state.labelRadius;
+  $('gap').value=state.gap; $('pageMargin').value=state.pageMargin;
+  $('fillSheet').checked=state.fillSheet; $('showGuides').checked=state.showGuides;
+  $('fontFamily').value=state.font;
+  $('t_eyebrow').value=state.text.eyebrow; $('t_only').value=state.text.only;
+  $('t_footer').value=state.text.footer; $('t_currency').value=state.currency;
+  $('bh_on').checked=state.bands.header.on; $('bh_h').value=state.bands.header.h; $('bh_c').value=state.bands.header.c;
+  $('bd_on').checked=state.bands.divider.on;$('bd_h').value=state.bands.divider.h;$('bd_c').value=state.bands.divider.c;
+  $('bf_on').checked=state.bands.footer.on; $('bf_h').value=state.bands.footer.h; $('bf_c').value=state.bands.footer.c;
+  $('pill_c').value=state.bands.pill;
+}
+
+/* ---------- init ---------- */
+buildFieldTable();
+buildEntries();
+bindControls();
+renderAll();
+</script>
+</body>
+</html>
