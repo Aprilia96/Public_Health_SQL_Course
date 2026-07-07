@@ -30,6 +30,9 @@
   .btn{font:inherit;font-weight:700;font-size:13px;border:none;border-radius:8px;padding:9px 14px;cursor:pointer;}
   .btn-primary{background:var(--accent);color:#fff;} .btn-primary:hover{background:#e06d12;}
   .btn-ghost{background:rgba(255,255,255,.14);color:#fff;} .btn-ghost:hover{background:rgba(255,255,255,.24);}
+  .btn2{font:inherit;font-weight:700;font-size:13px;border:1px solid var(--brand);background:#eef3ff;color:var(--brand);border-radius:8px;padding:9px 12px;cursor:pointer;}
+  .btn2:hover{background:#e2eaff;}
+  .codearea{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;word-break:break-all;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fafbfd;color:var(--ink);resize:vertical;}
 
   .framewarn{background:#fff4e6;color:#8a4b0a;border-bottom:1px solid #f2c48a;padding:10px 18px;font-size:13px;font-weight:600;line-height:1.4;}
   .framewarn b{color:#6a3a06;}
@@ -171,6 +174,21 @@
   <div class="layout">
     <!-- ===== CONTROLS ===== -->
     <aside class="controls">
+
+      <div class="section">
+        <h2>Save &amp; restore</h2>
+        <p class="hint">This code stores only what you changed, so it stays short. Copy it somewhere safe — paste it back any time to restore your layout.</p>
+        <textarea id="saveCode" class="codearea" rows="2" readonly></textarea>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px;">
+          <button class="btn2" id="copyCodeBtn">Copy code</button>
+          <span class="hint" id="codeLen" style="margin-top:0;"></span>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>Paste a saved code to restore</label>
+          <textarea id="loadCode" class="codearea" rows="2" placeholder="Paste code here…"></textarea>
+        </div>
+        <button class="btn2" id="restoreBtn" style="width:100%;margin-top:8px;">Restore from code</button>
+      </div>
 
       <div class="section">
         <h2>Label &amp; sheet</h2>
@@ -436,6 +454,7 @@ function renderSheet(){
   if(G>0) ro += ` · ${G}mm gap`;
   if(M>0) ro += ` · ${M}mm margin`;
   $('readout').textContent = ro;
+  updateSaveCode();
 }
 
 /* ---------- render everything ---------- */
@@ -516,6 +535,20 @@ function bindControls(){
   $('pill_c').addEventListener('input',e=>{state.bands.pill=e.target.value;renderAll();});
 
   $('addBtn').addEventListener('click',()=>{state.entries.push({name:'',storage:'',price:'',desc:''});buildEntries();renderAll();});
+  $('copyCodeBtn').addEventListener('click',async()=>{
+    const ta=$('saveCode'); ta.focus(); ta.select();
+    let ok=false;
+    try{ await navigator.clipboard.writeText(ta.value); ok=true; }
+    catch(_){ try{ ok=document.execCommand('copy'); }catch(__){} }
+    const btn=$('copyCodeBtn'); btn.textContent = ok?'Copied!':'Press Ctrl/Cmd+C';
+    setTimeout(()=>btn.textContent='Copy code',1600);
+  });
+  $('restoreBtn').addEventListener('click',()=>{
+    const v=$('loadCode').value.trim();
+    if(!v){ alert('Paste a saved code first.'); return; }
+    if(restoreFromCode(v)){ $('loadCode').value=''; alert('Restored your saved layout.'); }
+    else alert('That code could not be read. Make sure it was copied in full.');
+  });
   $('resetBtn').addEventListener('click',()=>{
     if(!confirm('Reset everything back to blank defaults?'))return;
     state=defaultState(); syncAllInputs(); buildFieldTable(); buildEntries(); renderAll();
@@ -542,6 +575,81 @@ function syncAllInputs(){
   $('bd_on').checked=state.bands.divider.on;$('bd_h').value=state.bands.divider.h;$('bd_c').value=state.bands.divider.c;
   $('bf_on').checked=state.bands.footer.on; $('bf_h').value=state.bands.footer.h; $('bf_c').value=state.bands.footer.c;
   $('pill_c').value=state.bands.pill;
+}
+
+/* ---------- save / restore (diff-only, key-shortened, base64) ---------- */
+const K2S = {
+  labelW:'1',labelH:'2',labelRadius:'3',gap:'4',pageMargin:'5',fillSheet:'6',showGuides:'7',
+  font:'8',currency:'9',text:'a',bands:'b',fields:'c',entries:'d',
+  eyebrow:'e',only:'f',footer:'g',header:'h',divider:'i',pill:'j',
+  on:'k',name:'l',storage:'m',price:'n',desc:'o',x:'p',y:'q',size:'r',color:'s',h:'t',c:'u'
+};
+const S2K = Object.fromEntries(Object.entries(K2S).map(([k,v])=>[v,k]));
+const mapKeys = (o,M)=>Array.isArray(o) ? o.map(v=>mapKeys(v,M))
+  : (o && typeof o==='object') ? Object.fromEntries(Object.entries(o).map(([k,v])=>[M[k]??k, mapKeys(v,M)]))
+  : o;
+
+function diffObj(cur, base){
+  const out={};
+  for(const k in cur){
+    if(k==='entries'){
+      const arr = cur.entries.map(e=>{
+        const eo={}; for(const kk in e){ if(String(e[kk]).trim()!=='') eo[kk]=e[kk]; } return eo;
+      });
+      const isDefault = arr.length===1 && Object.keys(arr[0]).length===0;
+      if(!isDefault) out.entries=arr;
+      continue;
+    }
+    const cv=cur[k], bv=base?base[k]:undefined;
+    if(cv && typeof cv==='object' && !Array.isArray(cv)){
+      const d=diffObj(cv, bv||{});
+      if(Object.keys(d).length) out[k]=d;
+    } else if(cv!==bv){
+      out[k]=cv;
+    }
+  }
+  return out;
+}
+function applyDiff(base, d){
+  for(const k in d){
+    if(k==='entries'){
+      base.entries = d.entries.map(e=>Object.assign({name:'',storage:'',price:'',desc:''}, e));
+      continue;
+    }
+    const v=d[k];
+    if(v && typeof v==='object' && !Array.isArray(v) && base[k] && typeof base[k]==='object') applyDiff(base[k], v);
+    else base[k]=v;
+  }
+  return base;
+}
+function b64e(str){
+  const bytes=new TextEncoder().encode(str); let bin='';
+  bytes.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function b64d(s){
+  s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='=';
+  const bin=atob(s), bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function updateSaveCode(){
+  const short = mapKeys(diffObj(state, defaultState()), K2S);
+  const code = 'PL1:'+b64e(JSON.stringify(short));
+  const ta=$('saveCode'); if(ta) ta.value=code;
+  const ln=$('codeLen'); if(ln) ln.textContent=code.length+' characters';
+}
+function restoreFromCode(raw){
+  try{
+    let code=raw.trim();
+    if(code.startsWith('PL1:')) code=code.slice(4);
+    const d = mapKeys(JSON.parse(b64d(code)), S2K);
+    const fresh = defaultState();
+    applyDiff(fresh, d);
+    state = fresh;
+    syncAllInputs(); buildFieldTable(); buildEntries(); renderAll();
+    return true;
+  }catch(e){ return false; }
 }
 
 /* ---------- init ---------- */
